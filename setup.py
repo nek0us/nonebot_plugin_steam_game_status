@@ -7,7 +7,7 @@ requirements = ["nonebot2","nonebot-adapter-onebot","nonebot-plugin-apscheduler"
 
 setup(
     name="nonebot_plugin_steam_game_status",
-    version="0.0.1",
+    version="0.0.2",
     author="nek0us",
     author_email="nekouss@gmail.com",
     description="在群内播报steam游戏状态的Nonebot插件",

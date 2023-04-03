@@ -12,15 +12,17 @@ from httpx import AsyncClient
 
 
 config_dev = get_driver().config
-if "steam_web_key" not in config_dev:
+try:
+    steam_web_key = config_dev.steam_web_key
+except:
     logger.error("steam_web_key未配置")
     raise ValueError("steam_web_key未配置")
 steam_web_key = config_dev.steam_web_key
+
 dirpath = Path() / "data" / "steam_group"
 dirpath.mkdir(parents=True, exist_ok=True)
 dirpath = Path() / "data" / "steam_group" / "group_list.json"
 dirpath.touch()
-
 
 
 @scheduler.scheduled_job("interval",minutes=1,id="steam")
