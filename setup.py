@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages 
 
-with open("README.md", "r") as readme_file:
+with open("README.md", "r",encoding="utf-8") as readme_file:
     readme = readme_file.read()
 
 requirements = ["nonebot2","nonebot-adapter-onebot","nonebot-plugin-apscheduler"] # 这里填依赖包信息

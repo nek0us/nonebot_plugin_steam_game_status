@@ -1,0 +1,9 @@
+LICENSE
+README.md
+setup.py
+nonebot_plugin_steam_game_status/__init__.py
+nonebot_plugin_steam_game_status.egg-info/PKG-INFO
+nonebot_plugin_steam_game_status.egg-info/SOURCES.txt
+nonebot_plugin_steam_game_status.egg-info/dependency_links.txt
+nonebot_plugin_steam_game_status.egg-info/requires.txt
+nonebot_plugin_steam_game_status.egg-info/top_level.txt
