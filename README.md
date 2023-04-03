@@ -1,0 +1,2 @@
+# nonebot_plugin_steam_game_status
+在群内播报steam游戏状态的Nonebot插件
