@@ -3,11 +3,11 @@ from setuptools import setup, find_packages
 with open("README.md", "r",encoding="utf-8") as readme_file:
     readme = readme_file.read()
 
-requirements = ["nonebot2","nonebot-adapter-onebot","nonebot-plugin-apscheduler"] # 这里填依赖包信息
+requirements = ["nonebot2","nonebot-adapter-onebot","nonebot-plugin-apscheduler","httpx"] # 这里填依赖包信息
 
 setup(
     name="nonebot_plugin_steam_game_status",
-    version="0.0.2",
+    version="0.0.4",
     author="nek0us",
     author_email="nekouss@gmail.com",
     description="在群内播报steam游戏状态的Nonebot插件",

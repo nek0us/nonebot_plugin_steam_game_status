@@ -16,18 +16,15 @@ try:
     steam_web_key = config_dev.steam_web_key
 except:
     logger.error("steam_web_key未配置")
-    raise ValueError("steam_web_key未配置")
-steam_web_key = config_dev.steam_web_key
+    #raise ValueError("steam_web_key未配置")
+    steam_web_key = ""
 
 dirpath = Path() / "data" / "steam_group"
 dirpath.mkdir(parents=True, exist_ok=True)
 dirpath = Path() / "data" / "steam_group" / "group_list.json"
 dirpath.touch()
 
-
-@scheduler.scheduled_job("interval",minutes=1,id="steam")
-async def now_steam():
-    header = {
+header = {
         "Host":"api.steampowered.com",
         "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/111.0",
         "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -37,6 +34,12 @@ async def now_steam():
         "Referer":"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/",
         "TE":"trailers"
     }
+
+
+
+@scheduler.scheduled_job("interval",minutes=1,id="steam")
+async def now_steam():
+    
     
     
     f = open(dirpath.__str__(),"r+")
@@ -66,6 +69,16 @@ async def now_steam():
                             pass
                         elif "gameextrainfo" in res_info and group_list[group_num][id][1] != "":
                             #如果发现开始玩了而之前也在玩
+                            if res_info["gameextrainfo"] != group_list[group_num][id][1]:
+                                #如果发现玩的是新游戏
+                                timestamp = int(time.time()/60)
+                                gama_info.append(timestamp)
+                                gama_info.append(res_info["gameextrainfo"])
+                                group_list[group_num][id] = gama_info
+                                await bot.send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 。"))
+                                f = open(dirpath.__str__(),"w")
+                                f.write(json.dumps(group_list))
+                                f.close()
                             pass
                         elif "gameextrainfo" not in res_info and group_list[group_num][id][1] != "":
                             # 之前有玩，现在没玩
@@ -83,13 +96,28 @@ async def now_steam():
                             # 一直没玩
                             pass
                     except:
-                        return None
+                        pass
                     
                     
 steam_bind = on_command("steam绑定",aliases={"steam.add","steam添加"},priority=5)
 @steam_bind.handle()
 async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Message = CommandArg()):
     if isinstance(event,GroupMessageEvent):
+        if not steam_web_key:
+            await steam_bind.finish("steam_web_key 未配置") 
+        if len(arg.extract_plain_text()) != 17:
+            await steam_bind.finish("steam id格式错误") 
+        steam_name: str = ""
+        try:
+            async with AsyncClient() as client:
+                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + arg.extract_plain_text()
+                res = await client.get(url,headers=header,timeout=30)
+                if res.status_code != 200:
+                    await steam_bind.finish(arg + " 绑定失败") 
+                steam_name = json.loads(res.text)["response"]["players"][0]['personaname']
+        except:
+            await steam_bind.finish(arg + " 绑定失败")
+        
         f = open(dirpath.__str__(),"r+")
         group_list = f.read()
         f.close()
@@ -100,12 +128,27 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
         f = open(dirpath.__str__(),"w")
         f.write(json.dumps(group_list))
         f.close()
-        await steam_bind.finish(arg + " 绑定成功")
+        await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 绑定成功")
                             
 steam_del = on_command("steam删除",aliases={"steam.del","steam解绑"},priority=5)
 @steam_del.handle()
 async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Message = CommandArg()):
     if isinstance(event,GroupMessageEvent):
+        if not steam_web_key:
+            await steam_bind.finish("steam_web_key 未配置") 
+        if len(arg.extract_plain_text()) != 17:
+            await steam_bind.finish("steam id格式错误") 
+        steam_name: str = ""
+        try:
+            async with AsyncClient() as client:
+                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + arg.extract_plain_text()
+                res = await client.get(url,headers=header,timeout=30)
+                if res.status_code != 200:
+                    await steam_bind.finish(arg + " 解绑失败") 
+                steam_name = json.loads(res.text)["response"]["players"][0]['personaname']
+        except:
+            await steam_bind.finish(arg + " 解绑失败")
+        
         f = open(dirpath.__str__(),"r+")
         group_list = f.read()
         f.close()
@@ -114,4 +157,4 @@ async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Me
         f = open(dirpath.__str__(),"w")
         f.write(json.dumps(group_list))
         f.close()
-        await steam_bind.finish(arg + " 删除成功")
+        await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 删除成功")
