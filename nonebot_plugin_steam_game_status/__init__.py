@@ -25,6 +25,10 @@ dirpath = Path() / "data" / "steam_group"
 dirpath.mkdir(parents=True, exist_ok=True)
 dirpath = Path() / "data" / "steam_group" / "group_list.json"
 dirpath.touch()
+if not dirpath.stat().st_size:
+    with open(dirpath.__str__(),"w") as f:
+        f.write("{}")
+        f.close()
 
 header = {
         "Host":"api.steampowered.com",
@@ -76,7 +80,7 @@ async def now_steam():
                                 user_info.append(res_info["gameextrainfo"])
                                 user_info.append(res_info['personaname'])
                                 group_list[group_num][id] = user_info
-                                await bot.send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 了。"))
+                                await bot.send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 。"))
                                 f = open(dirpath.__str__(),"w")
                                 f.write(json.dumps(group_list))
                                 f.close()
@@ -130,7 +134,7 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
         f = open(dirpath.__str__(),"w")
         f.write(json.dumps(group_list))
         f.close()
-        await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 绑定成功")
+        await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 绑定成功了")
                             
 steam_del = on_command("steam删除",aliases={"steam.del","steam解绑"},priority=5)
 @steam_del.handle()
@@ -151,15 +155,21 @@ async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Me
         except:
             await steam_bind.finish(arg + " 解绑失败")
         
+        
         f = open(dirpath.__str__(),"r+")
         group_list = f.read()
         f.close()
-        group_list = json.loads(group_list)
-        group_list[str(event.group_id)].pop(arg.extract_plain_text()) 
-        f = open(dirpath.__str__(),"w")
-        f.write(json.dumps(group_list))
-        f.close()
-        await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 删除成功")
+        try:
+            group_list = json.loads(group_list)
+            group_list[str(event.group_id)].pop(arg.extract_plain_text()) 
+            f = open(dirpath.__str__(),"w")
+            f.write(json.dumps(group_list))
+            f.close()
+            await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 删除成功了")
+        except :
+            await steam_bind.finish(f"没有找到Steam ID：{arg}")
+            
+        
         
         
 steam_bind_list = on_command("steam列表",aliases={"steam绑定列表","steam播报列表"},priority=5,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
@@ -169,15 +179,18 @@ async def steam_bind_list_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
         f = open(dirpath.__str__(),"r+")
         group_list = f.read()
         f.close()
-        id_list = json.loads(group_list)[str(event.group_id)]
-        msg = []
-        for id in id_list:
-            if "status" not in id:
-                msg += await node_msg(event.user_id,f"id：{id}\nname：{id_list[id][2]}")
-                
-        await bot.send_group_forward_msg(group_id=event.group_id,messages=msg)
+        try:
+            id_list = json.loads(group_list)[str(event.group_id)]
+            msg = []
+            for id in id_list:
+                if "status" not in id:
+                    msg += await node_msg(event.user_id,f"id：{id}\nname：{id_list[id][2]}")
+                    
+            await bot.send_group_forward_msg(group_id=event.group_id,messages=msg)
+        except:
+            await steam_bind.finish(f"本群未绑定ID，请先绑定。")
         
-    pass
+    
 
 steam_on = on_command("steam播报开启",aliases={"steam播报打开"},priority=5,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
 @steam_on.handle()
@@ -187,6 +200,8 @@ async def steam_on_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
         group_list = f.read()
         f.close()
         group_list = json.loads(group_list)
+        if str(event.group_id) not in group_list:
+            group_list[str(event.group_id)] = {}
         group_list[str(event.group_id)]["status"] = "on"
         f = open(dirpath.__str__(),"w")
         f.write(json.dumps(group_list))
@@ -201,6 +216,8 @@ async def steam_off_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
         group_list = f.read()
         f.close()
         group_list = json.loads(group_list)
+        if str(event.group_id) not in group_list:
+            group_list[str(event.group_id)] = {}
         group_list[str(event.group_id)]["status"] = "off"
         f = open(dirpath.__str__(),"w")
         f.write(json.dumps(group_list))
