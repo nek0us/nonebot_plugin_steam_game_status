@@ -159,15 +159,17 @@ async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Me
         f = open(dirpath.__str__(),"r+")
         group_list = f.read()
         f.close()
+        group_list = json.loads(group_list)
+        if str(event.group_id) not in group_list:
+            group_list[str(event.group_id)] = {}
         try:
-            group_list = json.loads(group_list)
             group_list[str(event.group_id)].pop(arg.extract_plain_text()) 
-            f = open(dirpath.__str__(),"w")
-            f.write(json.dumps(group_list))
-            f.close()
-            await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 删除成功了")
-        except :
+        except:
             await steam_bind.finish(f"没有找到Steam ID：{arg}")
+        f = open(dirpath.__str__(),"w")
+        f.write(json.dumps(group_list))
+        f.close()
+        await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 删除成功了")
             
         
         

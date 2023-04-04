@@ -1,3 +1,5 @@
+[![PyPi](https://img.shields.io/pypi/v/nonebot_plugin_steam_game_status.svg)](https://pypi.python.org/pypi/nonebot_plugin_steam_game_status)
+
 # nonebot_plugin_steam_game_status
 在群内播报steam游戏状态的Nonebot插件
 ==========
