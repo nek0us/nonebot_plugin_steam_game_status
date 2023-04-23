@@ -7,10 +7,13 @@ from nonebot.adapters.onebot.v11 import Message,MessageEvent,Bot,GroupMessageEve
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.log import logger
+import nonebot
+from nonebot.adapters.onebot.v11.adapter import Adapter
 from pathlib import Path
 import json
 import time
 from httpx import AsyncClient
+import asyncio
 
 
 config_dev = get_driver().config
@@ -26,9 +29,7 @@ dirpath.mkdir(parents=True, exist_ok=True)
 dirpath = Path() / "data" / "steam_group" / "group_list.json"
 dirpath.touch()
 if not dirpath.stat().st_size:
-    with open(dirpath.__str__(),"w") as f:
-        f.write("{}")
-        f.close()
+    dirpath.write_text("{}")
 
 header = {
         "Host":"api.steampowered.com",
@@ -40,69 +41,79 @@ header = {
         "Referer":"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/",
         "TE":"trailers"
     }
+driver = get_driver()
+status = True
 
-
-
-@scheduler.scheduled_job("interval",minutes=1,id="steam")
+async def get_status(group_list,group_num,id):
+    async with AsyncClient() as client:
+        try:
+            url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + id
+            res = await client.get(url,headers=header,timeout=30)
+            res_info = json.loads(res.text)["response"]["players"][0]
+            user_info = []
+            bots = nonebot.get_adapter(Adapter).bots
+            if "gameextrainfo" in res_info and group_list[group_num][id][1] == "":
+                #如果发现开始玩了而之前未玩
+                timestamp = int(time.time()/60)
+                user_info.append(timestamp)
+                user_info.append(res_info["gameextrainfo"])
+                user_info.append(res_info['personaname'])
+                group_list[group_num][id] = user_info
+                for bot in bots:
+                    try:
+                        await bots[bot].send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 了。"))
+                    except:
+                        pass
+                dirpath.write_text(json.dumps(group_list))
+            elif "gameextrainfo" in res_info and group_list[group_num][id][1] != "":
+                #如果发现开始玩了而之前也在玩
+                if res_info["gameextrainfo"] != group_list[group_num][id][1]:
+                    #如果发现玩的是新游戏
+                    timestamp = int(time.time()/60)
+                    user_info.append(timestamp)
+                    user_info.append(res_info["gameextrainfo"])
+                    user_info.append(res_info['personaname'])
+                    group_list[group_num][id] = user_info
+                    for bot in bots:
+                        try:
+                            await bots[bot].send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 了。"))
+                        except:
+                            pass
+                    dirpath.write_text(json.dumps(group_list))
+                pass
+            elif "gameextrainfo" not in res_info and group_list[group_num][id][1] != "":
+                # 之前有玩，现在没玩
+                timestamp = int(time.time()/60)
+                user_info.append(timestamp)
+                user_info.append("")
+                user_info.append(res_info['personaname'])
+                game_time = timestamp - group_list[group_num][id][0]
+                for bot in bots:
+                    try:
+                        await bots[bot].send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 玩了 {game_time} 分钟 {group_list[group_num][id][1]} 后不玩了。"))
+                    except:
+                        pass
+                group_list[group_num][id] = user_info
+                dirpath.write_text(json.dumps(group_list))
+            elif "gameextrainfo" not in res_info and group_list[group_num][id][1] == "":
+                # 一直没玩
+                pass
+        except:
+            pass
+    
+    
+    
+@scheduler.scheduled_job("interval",minutes=1,id="steam",misfire_grace_time=59)
 async def now_steam():
-    f = open(dirpath.__str__(),"r+")
-    group_list = f.read()
-    f.close()
-    group_list = json.loads(group_list)
+    task_list = []
+    group_list = json.loads(dirpath.read_text("utf8"))
     for group_num in group_list:
         if group_num and group_list[group_num]["status"] == "on":
             for id in group_list[group_num]:
-                async with AsyncClient() as client:
-                    try:
-                        url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + id
-                        res = await client.get(url,headers=header,timeout=30)
-                        res_info = json.loads(res.text)["response"]["players"][0]
-                        user_info = []
-                        bot = get_bot()
-                        if "gameextrainfo" in res_info and group_list[group_num][id][1] == "":
-                            #如果发现开始玩了而之前未玩
-                            timestamp = int(time.time()/60)
-                            user_info.append(timestamp)
-                            user_info.append(res_info["gameextrainfo"])
-                            user_info.append(res_info['personaname'])
-                            group_list[group_num][id] = user_info
-                            await bot.send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 。"))
-                            f = open(dirpath.__str__(),"w")
-                            f.write(json.dumps(group_list))
-                            f.close()
-                            pass
-                        elif "gameextrainfo" in res_info and group_list[group_num][id][1] != "":
-                            #如果发现开始玩了而之前也在玩
-                            if res_info["gameextrainfo"] != group_list[group_num][id][1]:
-                                #如果发现玩的是新游戏
-                                timestamp = int(time.time()/60)
-                                user_info.append(timestamp)
-                                user_info.append(res_info["gameextrainfo"])
-                                user_info.append(res_info['personaname'])
-                                group_list[group_num][id] = user_info
-                                await bot.send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 。"))
-                                f = open(dirpath.__str__(),"w")
-                                f.write(json.dumps(group_list))
-                                f.close()
-                            pass
-                        elif "gameextrainfo" not in res_info and group_list[group_num][id][1] != "":
-                            # 之前有玩，现在没玩
-                            timestamp = int(time.time()/60)
-                            user_info.append(timestamp)
-                            user_info.append("")
-                            user_info.append(res_info['personaname'])
-                            game_time = timestamp - group_list[group_num][id][0]
-                            await bot.send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 玩了 {game_time} 分钟 {group_list[group_num][id][1]} 后不玩了。"))
-                            group_list[group_num][id] = user_info
-                            f = open(dirpath.__str__(),"w")
-                            f.write(json.dumps(group_list))
-                            f.close() 
-                            pass
-                        elif "gameextrainfo" not in res_info and group_list[group_num][id][1] == "":
-                            # 一直没玩
-                            pass
-                    except:
-                        pass
+                if id != "status":
+                    task_list.append(get_status(group_list,group_num,id))
+    asyncio.gather(*task_list)
+                
                     
                     
 steam_bind = on_command("steam绑定",aliases={"steam.add","steam添加"},priority=5)
@@ -124,16 +135,11 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
         except:
             await steam_bind.finish(arg + " 绑定失败")
         
-        f = open(dirpath.__str__(),"r+")
-        group_list = f.read()
-        f.close()
-        group_list = json.loads(group_list)
+        group_list = json.loads(dirpath.read_text("utf8"))
         if str(event.group_id) not in group_list:
             group_list[str(event.group_id)] = {"status":"on"}
         group_list[str(event.group_id)][arg.extract_plain_text()] = [0,"",steam_name]
-        f = open(dirpath.__str__(),"w")
-        f.write(json.dumps(group_list))
-        f.close()
+        dirpath.write_text(json.dumps(group_list))
         await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 绑定成功了")
                             
 steam_del = on_command("steam删除",aliases={"steam.del","steam解绑"},priority=5)
@@ -156,19 +162,14 @@ async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Me
             await steam_bind.finish(arg + " 解绑失败")
         
         
-        f = open(dirpath.__str__(),"r+")
-        group_list = f.read()
-        f.close()
-        group_list = json.loads(group_list)
+        group_list = json.loads(dirpath.read_text("utf8"))
         if str(event.group_id) not in group_list:
             group_list[str(event.group_id)] = {}
         try:
             group_list[str(event.group_id)].pop(arg.extract_plain_text()) 
         except:
             await steam_bind.finish(f"没有找到Steam ID：{arg}")
-        f = open(dirpath.__str__(),"w")
-        f.write(json.dumps(group_list))
-        f.close()
+        dirpath.write_text(json.dumps(group_list))
         await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 删除成功了")
             
         
@@ -178,11 +179,8 @@ steam_bind_list = on_command("steam列表",aliases={"steam绑定列表","steam�
 @steam_bind_list.handle()
 async def steam_bind_list_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
     if isinstance(event,GroupMessageEvent):
-        f = open(dirpath.__str__(),"r+")
-        group_list = f.read()
-        f.close()
         try:
-            id_list = json.loads(group_list)[str(event.group_id)]
+            id_list = json.loads(dirpath.read_text("utf8"))[str(event.group_id)]
             msg = []
             for id in id_list:
                 if "status" not in id:
@@ -198,10 +196,7 @@ steam_on = on_command("steam播报开启",aliases={"steam播报打开"},priority
 @steam_on.handle()
 async def steam_on_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
     if isinstance(event,GroupMessageEvent):
-        f = open(dirpath.__str__(),"r+")
-        group_list = f.read()
-        f.close()
-        group_list = json.loads(group_list)
+        group_list = json.loads(dirpath.read_text("utf8"))
         if str(event.group_id) not in group_list:
             group_list[str(event.group_id)] = {}
         group_list[str(event.group_id)]["status"] = "on"
@@ -221,9 +216,7 @@ async def steam_off_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
         if str(event.group_id) not in group_list:
             group_list[str(event.group_id)] = {}
         group_list[str(event.group_id)]["status"] = "off"
-        f = open(dirpath.__str__(),"w")
-        f.write(json.dumps(group_list))
-        f.close()
+        dirpath.write_text(json.dumps(group_list))
         await steam_on.finish("播报关闭了")
         
 async def node_msg(user_id,plain_text):
