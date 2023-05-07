@@ -9,6 +9,7 @@ from nonebot.params import CommandArg
 from nonebot.log import logger
 import nonebot
 from nonebot.adapters.onebot.v11.adapter import Adapter
+from nonebot.exception import MatcherException
 from pathlib import Path
 import json
 import time
@@ -98,8 +99,8 @@ async def get_status(group_list,group_num,id):
             elif "gameextrainfo" not in res_info and group_list[group_num][id][1] == "":
                 # 一直没玩
                 pass
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"steam id:{id} 查询状态失败，{e}")
     
     
     
@@ -121,56 +122,51 @@ steam_bind = on_command("steam绑定",aliases={"steam.add","steam添加"},priori
 async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Message = CommandArg()):
     if isinstance(event,GroupMessageEvent):
         if not steam_web_key:
-            await steam_bind.finish("steam_web_key 未配置") 
+            await matcher.finish("steam_web_key 未配置") 
         if len(arg.extract_plain_text()) != 17:
-            await steam_bind.finish("steam id格式错误") 
+            await matcher.finish("steam id格式错误") 
         steam_name: str = ""
         try:
             async with AsyncClient() as client:
                 url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + arg.extract_plain_text()
                 res = await client.get(url,headers=header,timeout=30)
-                if res.status_code != 200:
-                    await steam_bind.finish(arg + " 绑定失败") 
-                steam_name = json.loads(res.text)["response"]["players"][0]['personaname']
-        except:
-            await steam_bind.finish(arg + " 绑定失败")
+            if res.status_code != 200:
+                logger.debug(f"{arg.extract_plain_text()} 绑定失败，{res.status_code} {res.text}")
+                await matcher.finish(f"{arg.extract_plain_text()} 绑定失败，{res.status_code} {res.text}") 
+            if json.loads(res.text)["response"]["players"] == []:
+                logger.debug(f"{arg.extract_plain_text()} 绑定失败，查无此人，请检查输入的id")
+                await matcher.finish(f"{arg.extract_plain_text()} 绑定失败，查无此人，请检查输入的id") 
+            steam_name = json.loads(res.text)["response"]["players"][0]['personaname']
+        except MatcherException:
+            raise
+        except Exception as e:
+            logger.debug(f"{arg.extract_plain_text()} 绑定失败，{e}")
+            await matcher.finish(f"{arg.extract_plain_text()} 绑定失败，{e}")
         
         group_list = json.loads(dirpath.read_text("utf8"))
         if str(event.group_id) not in group_list:
             group_list[str(event.group_id)] = {"status":"on"}
         group_list[str(event.group_id)][arg.extract_plain_text()] = [0,"",steam_name]
         dirpath.write_text(json.dumps(group_list))
-        await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 绑定成功了")
+        await matcher.finish(f"Steam ID：{arg.extract_plain_text()}\nSteam Name：{steam_name}\n 绑定成功了")
                             
 steam_del = on_command("steam删除",aliases={"steam.del","steam解绑"},priority=5)
 @steam_del.handle()
 async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Message = CommandArg()):
     if isinstance(event,GroupMessageEvent):
-        if not steam_web_key:
-            await steam_bind.finish("steam_web_key 未配置") 
         if len(arg.extract_plain_text()) != 17:
-            await steam_bind.finish("steam id格式错误") 
+            await steam_del.finish("steam id格式错误") 
         steam_name: str = ""
-        try:
-            async with AsyncClient() as client:
-                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + arg.extract_plain_text()
-                res = await client.get(url,headers=header,timeout=30)
-                if res.status_code != 200:
-                    await steam_bind.finish(arg + " 解绑失败") 
-                steam_name = json.loads(res.text)["response"]["players"][0]['personaname']
-        except:
-            await steam_bind.finish(arg + " 解绑失败")
-        
-        
         group_list = json.loads(dirpath.read_text("utf8"))
         if str(event.group_id) not in group_list:
             group_list[str(event.group_id)] = {}
         try:
+            steam_name = group_list[str(event.group_id)][arg.extract_plain_text()][2]
             group_list[str(event.group_id)].pop(arg.extract_plain_text()) 
         except:
-            await steam_bind.finish(f"没有找到Steam ID：{arg}")
+            await steam_del.finish(f"没有找到Steam ID：{arg.extract_plain_text()}")
         dirpath.write_text(json.dumps(group_list))
-        await steam_bind.finish(f"Steam ID：{arg}\nSteam Name：{steam_name}\n 删除成功了")
+        await steam_del.finish(f"Steam ID：{arg.extract_plain_text()}\nSteam Name：{steam_name}\n 删除成功了")
             
         
         
@@ -188,7 +184,7 @@ async def steam_bind_list_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
                     
             await bot.send_group_forward_msg(group_id=event.group_id,messages=msg)
         except:
-            await steam_bind.finish(f"本群未绑定ID，请先绑定。")
+            await steam_bind_list.finish(f"本群未绑定任何steam ID，请先绑定。")
         
     
 
@@ -203,7 +199,7 @@ async def steam_on_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
         f = open(dirpath.__str__(),"w")
         f.write(json.dumps(group_list))
         f.close()
-        await steam_on.finish("播报开启了")
+        await steam_on.finish("steam播报开启了")
 
 steam_off = on_command("steam播报关闭",aliases={"steam播报停止"},priority=5,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
 @steam_off.handle()
@@ -217,7 +213,7 @@ async def steam_off_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
             group_list[str(event.group_id)] = {}
         group_list[str(event.group_id)]["status"] = "off"
         dirpath.write_text(json.dumps(group_list))
-        await steam_on.finish("播报关闭了")
+        await steam_off.finish("steam播报关闭了")
         
 async def node_msg(user_id,plain_text):
     if not plain_text:

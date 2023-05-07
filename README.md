@@ -7,13 +7,20 @@
 ## 安装
 
 ```bash
+# 使用pip安装，记得手动添加插件名到配置文件
 pip install nonebot_plugin_steam_game_status
+
+# 使用nb-cli安装
+nb plugin install nonebot_plugin_steam_game_status
+
+# 更新至最新版 
+pip install nonebot_plugin_steam_game_status --upgrade
 ```
 
 ## 配置
 ### 获取steam_web_api_key
 
-获取steam_web_key[steam_web_key](https://steamcommunity.com/dev/apikey)
+获取[steam_web_key](https://steamcommunity.com/dev/apikey)
 
 配置文件内填写：
 ```bash
@@ -38,8 +45,23 @@ steam_web_key="your key"
 
 群友的koishi bot的该效果插件
 
+## 注意事项
+
+1.也许不支持播报Linux Steam客户端游戏
+
+2.不支持播报Steam隐身状态下进行的游戏
+
 ## 更新记录
 
+2023.05.07
+
+1.优化了日志输出，和部分代码
+
+2.感谢 [050644zf](https://github.com/050644zf) 提供了更适合的steam id获取方式
+
+
 2023.04.23
+
 1.优化了监控代码，解决请求阻塞过久的问题
+
 2.解决消息在多账号下无法发送的问题
