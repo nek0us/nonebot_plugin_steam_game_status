@@ -46,7 +46,7 @@ driver = get_driver()
 status = True
 
 async def get_status(group_list,group_num,id):
-    async with AsyncClient() as client:
+    async with AsyncClient(verify=False) as client:
         try:
             url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + id
             res = await client.get(url,headers=header,timeout=30)
@@ -127,7 +127,7 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
             await matcher.finish("steam id格式错误") 
         steam_name: str = ""
         try:
-            async with AsyncClient() as client:
+            async with AsyncClient(verify=False) as client:
                 url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + arg.extract_plain_text()
                 res = await client.get(url,headers=header,timeout=30)
             if res.status_code != 200:

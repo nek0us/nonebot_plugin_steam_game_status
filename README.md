@@ -59,6 +59,9 @@ steam_web_key="your key"
 
 2.感谢 [050644zf](https://github.com/050644zf) 提供了更适合的steam id获取方式
 
+3.关闭了证书验证，避免代理影响
+
+
 
 2023.04.23
 
