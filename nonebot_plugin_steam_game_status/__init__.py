@@ -10,20 +10,48 @@ from nonebot.log import logger
 import nonebot
 from nonebot.adapters.onebot.v11.adapter import Adapter
 from nonebot.exception import MatcherException
+from nonebot.plugin import PluginMetadata
 from pathlib import Path
 import json
 import time
 from httpx import AsyncClient
 import asyncio
+from .config import Config,__version__
 
-
-config_dev = get_driver().config
-try:
-    steam_web_key = config_dev.steam_web_key
-except:
-    logger.error("steam_web_key未配置")
-    #raise ValueError("steam_web_key未配置")
-    steam_web_key = ""
+config_dev = Config.parse_obj(get_driver().config)
+if not config_dev.steam_web_key:
+    logger.warning("steam_web_key未配置")
+    
+__plugin_meta__ = PluginMetadata(
+    name="Steam游戏状态",
+    description="播报群友的Steam游戏状态",
+    usage="""首先获取自己的Steam ID，
+        获取方法：
+            Steam 桌面网站或桌面客户端：点开右上角昵称下拉菜单，点击账户明细，即可看到 Steam ID
+            Steam 应用：点击右上角头像，点击账户明细，即可看到 Steam ID
+        
+        (如果有命令前缀，需要加上，一般为 / )    
+        绑定方法：
+            steam绑定/steam添加/steam.add [个人ID数值] 
+            
+        删除方法：
+            steam解绑/steam删除/steam.del [个人ID数值] 
+            
+        管理员命令：
+            steam列表/steam绑定列表 	    
+            steam播报开启/steam播报打开  
+            steam播报关闭/steam播报停止 	
+    """,
+    type="application",
+    config=Config,
+    homepage="https://github.com/nek0us/nonebot_plugin_steam_game_status",
+    supported_adapters={"~onebot.v11"},
+    extra={
+        "author":"nek0us",
+        "version":__version__,
+        "priority":config_dev.steam_command_priority
+    }
+)
 
 dirpath = Path() / "data" / "steam_group"
 dirpath.mkdir(parents=True, exist_ok=True)
@@ -48,7 +76,7 @@ status = True
 async def get_status(group_list,group_num,id):
     async with AsyncClient(verify=False) as client:
         try:
-            url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + id
+            url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + config_dev.steam_web_key + "&steamids=" + id
             res = await client.get(url,headers=header,timeout=30)
             res_info = json.loads(res.text)["response"]["players"][0]
             user_info = []
@@ -106,29 +134,30 @@ async def get_status(group_list,group_num,id):
     
 @scheduler.scheduled_job("interval",minutes=1,id="steam",misfire_grace_time=59)
 async def now_steam():
-    task_list = []
-    group_list = json.loads(dirpath.read_text("utf8"))
-    for group_num in group_list:
-        if group_num and group_list[group_num]["status"] == "on":
-            for id in group_list[group_num]:
-                if id != "status":
-                    task_list.append(get_status(group_list,group_num,id))
-    asyncio.gather(*task_list)
+    if config_dev.steam_web_key:
+        task_list = []
+        group_list = json.loads(dirpath.read_text("utf8"))
+        for group_num in group_list:
+            if group_num and group_list[group_num]["status"] == "on":
+                for id in group_list[group_num]:
+                    if id != "status":
+                        task_list.append(get_status(group_list,group_num,id))
+        asyncio.gather(*task_list)
                 
                     
                     
-steam_bind = on_command("steam绑定",aliases={"steam.add","steam添加"},priority=5)
+steam_bind = on_command("steam绑定",aliases={"steam.add","steam添加"},priority=config_dev.steam_command_priority)
 @steam_bind.handle()
 async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Message = CommandArg()):
     if isinstance(event,GroupMessageEvent):
-        if not steam_web_key:
+        if not config_dev.steam_web_key:
             await matcher.finish("steam_web_key 未配置") 
         if len(arg.extract_plain_text()) != 17:
             await matcher.finish("steam id格式错误") 
         steam_name: str = ""
         try:
             async with AsyncClient(verify=False) as client:
-                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + steam_web_key + "&steamids=" + arg.extract_plain_text()
+                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + config_dev.steam_web_key + "&steamids=" + arg.extract_plain_text()
                 res = await client.get(url,headers=header,timeout=30)
             if res.status_code != 200:
                 logger.debug(f"{arg.extract_plain_text()} 绑定失败，{res.status_code} {res.text}")
@@ -150,7 +179,7 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
         dirpath.write_text(json.dumps(group_list))
         await matcher.finish(f"Steam ID：{arg.extract_plain_text()}\nSteam Name：{steam_name}\n 绑定成功了")
                             
-steam_del = on_command("steam删除",aliases={"steam.del","steam解绑"},priority=5)
+steam_del = on_command("steam删除",aliases={"steam.del","steam解绑"},priority=config_dev.steam_command_priority)
 @steam_del.handle()
 async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Message = CommandArg()):
     if isinstance(event,GroupMessageEvent):
@@ -171,7 +200,7 @@ async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Me
         
         
         
-steam_bind_list = on_command("steam列表",aliases={"steam绑定列表","steam播报列表"},priority=5,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
+steam_bind_list = on_command("steam列表",aliases={"steam绑定列表","steam播报列表"},priority=config_dev.steam_command_priority,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
 @steam_bind_list.handle()
 async def steam_bind_list_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
     if isinstance(event,GroupMessageEvent):
@@ -188,7 +217,7 @@ async def steam_bind_list_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
         
     
 
-steam_on = on_command("steam播报开启",aliases={"steam播报打开"},priority=5,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
+steam_on = on_command("steam播报开启",aliases={"steam播报打开"},priority=config_dev.steam_command_priority,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
 @steam_on.handle()
 async def steam_on_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
     if isinstance(event,GroupMessageEvent):
@@ -201,7 +230,7 @@ async def steam_on_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
         f.close()
         await steam_on.finish("steam播报开启了")
 
-steam_off = on_command("steam播报关闭",aliases={"steam播报停止"},priority=5,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
+steam_off = on_command("steam播报关闭",aliases={"steam播报停止"},priority=config_dev.steam_command_priority,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
 @steam_off.handle()
 async def steam_off_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
     if isinstance(event,GroupMessageEvent):
