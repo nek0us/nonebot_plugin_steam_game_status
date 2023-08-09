@@ -152,12 +152,18 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
     if isinstance(event,GroupMessageEvent):
         if not config_dev.steam_web_key:
             await matcher.finish("steam_web_key 未配置") 
-        if len(arg.extract_plain_text()) != 17:
-            await matcher.finish("steam id格式错误") 
+        steam_id = arg.extract_plain_text()
+        if len(steam_id) != 17:
+            try:
+                steam_id = int(steam_id)
+                steam_id += 76561197960265728
+                steam_id = str(steam_id)
+            except:
+                await matcher.finish("steam id格式错误")
         steam_name: str = ""
         try:
             async with AsyncClient(verify=False) as client:
-                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + config_dev.steam_web_key + "&steamids=" + arg.extract_plain_text()
+                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + config_dev.steam_web_key + "&steamids=" + steam_id
                 res = await client.get(url,headers=header,timeout=30)
             if res.status_code != 200:
                 logger.debug(f"{arg.extract_plain_text()} 绑定失败，{res.status_code} {res.text}")
@@ -175,9 +181,9 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
         group_list = json.loads(dirpath.read_text("utf8"))
         if str(event.group_id) not in group_list:
             group_list[str(event.group_id)] = {"status":"on"}
-        group_list[str(event.group_id)][arg.extract_plain_text()] = [0,"",steam_name]
+        group_list[str(event.group_id)][steam_id] = [0,"",steam_name]
         dirpath.write_text(json.dumps(group_list))
-        await matcher.finish(f"Steam ID：{arg.extract_plain_text()}\nSteam Name：{steam_name}\n 绑定成功了")
+        await matcher.finish(f"Steam ID：{arg.extract_plain_text()}\nsteamID64：{steam_id}\nSteam Name：{steam_name}\n 绑定成功了")
                             
 steam_del = on_command("steam删除",aliases={"steam.del","steam解绑"},priority=config_dev.steam_command_priority)
 @steam_del.handle()
