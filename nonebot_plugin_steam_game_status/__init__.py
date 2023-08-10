@@ -1,4 +1,5 @@
-from nonebot import require,get_driver,get_bot,on_command
+import random
+from nonebot import require,get_driver,on_command
 require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler
 from nonebot.permission import SUPERUSER
@@ -7,10 +8,9 @@ from nonebot.adapters.onebot.v11 import Message,MessageEvent,Bot,GroupMessageEve
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.log import logger
-import nonebot
-from nonebot.adapters.onebot.v11.adapter import Adapter
 from nonebot.exception import MatcherException
 from nonebot.plugin import PluginMetadata
+from nonebot_plugin_sendmsg_by_bots import tools
 from pathlib import Path
 import json
 import time
@@ -27,10 +27,14 @@ __plugin_meta__ = PluginMetadata(
     description="播报群友的Steam游戏状态",
     usage="""首先获取自己的Steam ID，
         获取方法：
-            Steam 桌面网站或桌面客户端：点开右上角昵称下拉菜单，点击账户明细，即可看到 Steam ID
-            Steam 应用：点击右上角头像，点击账户明细，即可看到 Steam ID
-        
+            获取SteamID64
+                Steam 桌面网站或桌面客户端：点开右上角昵称下拉菜单，点击账户明细，即可看到 Steam ID
+                Steam 应用：点击右上角头像，点击账户明细，即可看到 Steam ID
+            获取Steam好友代码
+                Steam 桌面网站或桌面客户端：点开导航栏 好友 选项卡，点击添加好友，即可看到 Steam 好友代码
+                Steam 应用：点击右上角头像，点击好友，点击添加好友，即可看到 Steam 好友代码
         (如果有命令前缀，需要加上，一般为 / )    
+        
         绑定方法：
             steam绑定/steam添加/steam.add [个人ID数值] 
             
@@ -76,11 +80,10 @@ status = True
 async def get_status(group_list,group_num,id):
     async with AsyncClient(verify=False) as client:
         try:
-            url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + config_dev.steam_web_key + "&steamids=" + id
+            url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + id
             res = await client.get(url,headers=header,timeout=30)
             res_info = json.loads(res.text)["response"]["players"][0]
             user_info = []
-            bots = nonebot.get_adapter(Adapter).bots
             if "gameextrainfo" in res_info and group_list[group_num][id][1] == "":
                 #如果发现开始玩了而之前未玩
                 timestamp = int(time.time()/60)
@@ -88,11 +91,7 @@ async def get_status(group_list,group_num,id):
                 user_info.append(res_info["gameextrainfo"])
                 user_info.append(res_info['personaname'])
                 group_list[group_num][id] = user_info
-                for bot in bots:
-                    try:
-                        await bots[bot].send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 了。"))
-                    except:
-                        pass
+                await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 了。"))
                 dirpath.write_text(json.dumps(group_list))
             elif "gameextrainfo" in res_info and group_list[group_num][id][1] != "":
                 #如果发现开始玩了而之前也在玩
@@ -103,11 +102,7 @@ async def get_status(group_list,group_num,id):
                     user_info.append(res_info["gameextrainfo"])
                     user_info.append(res_info['personaname'])
                     group_list[group_num][id] = user_info
-                    for bot in bots:
-                        try:
-                            await bots[bot].send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 了。"))
-                        except:
-                            pass
+                    await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 了。"))
                     dirpath.write_text(json.dumps(group_list))
                 pass
             elif "gameextrainfo" not in res_info and group_list[group_num][id][1] != "":
@@ -117,11 +112,7 @@ async def get_status(group_list,group_num,id):
                 user_info.append("")
                 user_info.append(res_info['personaname'])
                 game_time = timestamp - group_list[group_num][id][0]
-                for bot in bots:
-                    try:
-                        await bots[bot].send_group_msg(group_id=int(group_num),message=Message(f"{res_info['personaname']} 玩了 {game_time} 分钟 {group_list[group_num][id][1]} 后不玩了。"))
-                    except:
-                        pass
+                await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 玩了 {game_time} 分钟 {group_list[group_num][id][1]} 后不玩了。"))
                 group_list[group_num][id] = user_info
                 dirpath.write_text(json.dumps(group_list))
             elif "gameextrainfo" not in res_info and group_list[group_num][id][1] == "":
@@ -163,7 +154,7 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
         steam_name: str = ""
         try:
             async with AsyncClient(verify=False) as client:
-                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + config_dev.steam_web_key + "&steamids=" + steam_id
+                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
                 res = await client.get(url,headers=header,timeout=30)
             if res.status_code != 200:
                 logger.debug(f"{arg.extract_plain_text()} 绑定失败，{res.status_code} {res.text}")
@@ -271,3 +262,15 @@ async def node_msg(user_id,plain_text):
 	}
 ]
     return node
+
+
+def get_steam_key() -> str:
+    if type(config_dev.steam_web_key) == str:
+        return config_dev.steam_web_key
+    elif type(config_dev.steam_web_key) == list:
+        return random.choice(config_dev.steam_web_key)
+    else:
+        logger.warning("get steam web key error.")
+        return "get steam web key error."
+        
+    

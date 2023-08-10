@@ -1,5 +1,5 @@
 from pydantic import BaseModel,validator
-from typing import Optional
+from typing import Union, Optional, List
 from nonebot.log import logger
 import sys
 
@@ -14,7 +14,7 @@ except Exception:
     __version__ = None
 
 class Config(BaseModel):
-    steam_web_key: Optional[str] = ""
+    steam_web_key: Optional[Union[str, List[str]]] = None
     steam_command_priority: int = 5
     steam_plugin_enabled: bool = True
     
@@ -22,6 +22,9 @@ class Config(BaseModel):
     def check_api_key(cls,v):
         if isinstance(v,str):
             logger.info("steam_web_key 读取成功")
+            return v
+        elif isinstance(v, list) and all(isinstance(item, str) for item in v):
+            logger.info("steam_web_key 列表读取成功")
             return v
     
     @validator("steam_command_priority")

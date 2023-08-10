@@ -80,8 +80,14 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 
 | 配置项 | 必填 | 默认值 | 类型 | 说明 |
 |:-----:|:----:|:----:|:----:|:----:|
-| steam_web_key | 是 | 无 | str | Steam Api Key |
+| steam_web_key | 是 | 无 | str 或 list | Steam Api Key |
 | steam_command_priority | 否 | 5 | int | 事件处理函数优先级 |
+
+单个 steam key 配置示例
+[![pPmVANn.png](https://s1.ax1x.com/2023/08/10/pPmVANn.png)](https://imgse.com/i/pPmVANn)
+
+多个 steam key 配置示例
+[![pPmVEhq.png](https://s1.ax1x.com/2023/08/10/pPmVEhq.png)](https://imgse.com/i/pPmVEhq)
 
 ## 🎉 使用
 ### 获取SteamID64
