@@ -21,7 +21,7 @@ from .config import Config,__version__
 config_dev = Config.parse_obj(get_driver().config)
 if not config_dev.steam_web_key:
     logger.warning("steam_web_key未配置")
-    
+
 __plugin_meta__ = PluginMetadata(
     name="Steam游戏状态",
     description="播报群友的Steam游戏状态",
@@ -77,7 +77,21 @@ header = {
 driver = get_driver()
 status = True
 
-async def get_status(group_list,group_num,id):
+@driver.on_startup
+async def _():
+    # 当bot启动时，忽略所有未播报的游戏
+    with dirpath.open('r') as file:
+        data = json.load(file)
+
+    for group in data.values():
+        for _, user_info in group.items():
+            if isinstance(user_info, list) and user_info[0] != 0:
+                user_info[0] = -1  # -1 为特殊时间用来判断是否重启
+
+    with dirpath.open('w') as file:
+        json.dump(data, file)
+
+async def get_status(group_list, group_num,id):
     async with AsyncClient(verify=False) as client:
         try:
             url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + id
@@ -85,7 +99,7 @@ async def get_status(group_list,group_num,id):
             res_info = json.loads(res.text)["response"]["players"][0]
             user_info = []
             if "gameextrainfo" in res_info and group_list[group_num][id][1] == "":
-                #如果发现开始玩了而之前未玩
+                # 如果发现开始玩了而之前未玩
                 timestamp = int(time.time()/60)
                 user_info.append(timestamp)
                 user_info.append(res_info["gameextrainfo"])
@@ -93,10 +107,10 @@ async def get_status(group_list,group_num,id):
                 group_list[group_num][id] = user_info
                 await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 了。"))
                 dirpath.write_text(json.dumps(group_list))
-            elif "gameextrainfo" in res_info and group_list[group_num][id][1] != "":
-                #如果发现开始玩了而之前也在玩
+            elif "gameextrainfo" in res_info and group_list[group_num][id][0] != -1 and group_list[group_num][id][1] != "":
+                # 如果发现开始玩了而之前也在玩
                 if res_info["gameextrainfo"] != group_list[group_num][id][1]:
-                    #如果发现玩的是新游戏
+                    # 如果发现玩的是新游戏
                     timestamp = int(time.time()/60)
                     user_info.append(timestamp)
                     user_info.append(res_info["gameextrainfo"])
@@ -112,7 +126,11 @@ async def get_status(group_list,group_num,id):
                 user_info.append("")
                 user_info.append(res_info['personaname'])
                 game_time = timestamp - group_list[group_num][id][0]
-                await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 玩了 {game_time} 分钟 {group_list[group_num][id][1]} 后不玩了。"))
+                # 判断是否是重启后的结束游戏
+                if group_list[group_num][id][0] == -1:
+                    await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 不再玩 {group_list[group_num][id][1]} 了。但由于Bot重启，记录出现异常，本次下线不统计总游戏时间。"))
+                else:
+                    await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 玩了 {game_time} 分钟 {group_list[group_num][id][1]} 后不玩了。"))
                 group_list[group_num][id] = user_info
                 dirpath.write_text(json.dumps(group_list))
             elif "gameextrainfo" not in res_info and group_list[group_num][id][1] == "":
@@ -120,10 +138,9 @@ async def get_status(group_list,group_num,id):
                 pass
         except Exception as e:
             logger.debug(f"steam id:{id} 查询状态失败，{e}")
-    
-    
-    
-@scheduler.scheduled_job("interval",minutes=1,id="steam",misfire_grace_time=59)
+
+
+@scheduler.scheduled_job("interval", minutes=1, id="steam", misfire_grace_time=59)
 async def now_steam():
     if config_dev.steam_web_key:
         task_list = []
@@ -134,12 +151,11 @@ async def now_steam():
                     if id != "status":
                         task_list.append(get_status(group_list,group_num,id))
         asyncio.gather(*task_list)
-                
-                    
-                    
-steam_bind = on_command("steam绑定",aliases={"steam.add","steam添加"},priority=config_dev.steam_command_priority)
+
+         
+steam_bind = on_command("steam绑定", aliases={"steam.add", "steam添加"}, priority=config_dev.steam_command_priority)
 @steam_bind.handle()
-async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Message = CommandArg()):
+async def steam_bind_handle(event: MessageEvent, matcher: Matcher, arg: Message = CommandArg()):
     if isinstance(event,GroupMessageEvent):
         if not config_dev.steam_web_key:
             await matcher.finish("steam_web_key 未配置") 
@@ -175,10 +191,11 @@ async def steam_bind_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: M
         group_list[str(event.group_id)][steam_id] = [0,"",steam_name]
         dirpath.write_text(json.dumps(group_list))
         await matcher.finish(f"Steam ID：{arg.extract_plain_text()}\nsteamID64：{steam_id}\nSteam Name：{steam_name}\n 绑定成功了")
-                            
-steam_del = on_command("steam删除",aliases={"steam.del","steam解绑"},priority=config_dev.steam_command_priority)
+
+                    
+steam_del = on_command("steam删除", aliases={"steam.del","steam解绑"}, priority=config_dev.steam_command_priority)
 @steam_del.handle()
-async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Message = CommandArg()):
+async def steam_del_handle(event: MessageEvent, arg: Message = CommandArg()):
     if isinstance(event,GroupMessageEvent):
         if len(arg.extract_plain_text()) != 17:
             await steam_del.finish("steam id格式错误") 
@@ -192,14 +209,12 @@ async def steam_del_handle(bot: Bot,event: MessageEvent,matcher: Matcher,arg: Me
         except:
             await steam_del.finish(f"没有找到Steam ID：{arg.extract_plain_text()}")
         dirpath.write_text(json.dumps(group_list))
-        await steam_del.finish(f"Steam ID：{arg.extract_plain_text()}\nSteam Name：{steam_name}\n 删除成功了")
-            
-        
-        
-        
-steam_bind_list = on_command("steam列表",aliases={"steam绑定列表","steam播报列表"},priority=config_dev.steam_command_priority,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
+        await steam_del.finish(f"Steam ID：{arg.extract_plain_text()}\nSteam Name：{steam_name}\n 删除成功了")    
+
+
+steam_bind_list = on_command("steam列表", aliases={"steam绑定列表","steam播报列表"}, priority=config_dev.steam_command_priority, permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
 @steam_bind_list.handle()
-async def steam_bind_list_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
+async def steam_bind_list_handle(bot: Bot, event: MessageEvent):
     if isinstance(event,GroupMessageEvent):
         try:
             id_list = json.loads(dirpath.read_text("utf8"))[str(event.group_id)]
@@ -210,13 +225,12 @@ async def steam_bind_list_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
                     
             await bot.send_group_forward_msg(group_id=event.group_id,messages=msg)
         except:
-            await steam_bind_list.finish(f"本群未绑定任何steam ID，请先绑定。")
-        
-    
+            await steam_bind_list.finish(f"本群尚未绑定任何steam ID，请先绑定。")
 
-steam_on = on_command("steam播报开启",aliases={"steam播报打开"},priority=config_dev.steam_command_priority,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
+
+steam_on = on_command("steam播报开启", aliases={"steam播报打开"}, priority=config_dev.steam_command_priority, permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
 @steam_on.handle()
-async def steam_on_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
+async def steam_on_handle(event: MessageEvent):
     if isinstance(event,GroupMessageEvent):
         group_list = json.loads(dirpath.read_text("utf8"))
         if str(event.group_id) not in group_list:
@@ -225,11 +239,12 @@ async def steam_on_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
         f = open(dirpath.__str__(),"w")
         f.write(json.dumps(group_list))
         f.close()
-        await steam_on.finish("steam播报开启了")
+        await steam_on.finish("steam播报已开启")
 
-steam_off = on_command("steam播报关闭",aliases={"steam播报停止"},priority=config_dev.steam_command_priority,permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
+
+steam_off = on_command("steam播报关闭", aliases={"steam播报停止"}, priority=config_dev.steam_command_priority, permission=SUPERUSER|GROUP_ADMIN|GROUP_OWNER)
 @steam_off.handle()
-async def steam_off_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
+async def steam_off_handle(event: MessageEvent):
     if isinstance(event,GroupMessageEvent):
         f = open(dirpath.__str__(),"r+")
         group_list = f.read()
@@ -239,9 +254,10 @@ async def steam_off_handle(bot: Bot,event: MessageEvent,matcher: Matcher):
             group_list[str(event.group_id)] = {}
         group_list[str(event.group_id)]["status"] = "off"
         dirpath.write_text(json.dumps(group_list))
-        await steam_off.finish("steam播报关闭了")
-        
-async def node_msg(user_id,plain_text):
+        await steam_off.finish("steam播报已关闭")
+
+
+async def node_msg(user_id, plain_text):
     if not plain_text:
         plain_text = "无"
     node = [
@@ -272,5 +288,3 @@ def get_steam_key() -> str:
     else:
         logger.warning("get steam web key error.")
         return "get steam web key error."
-        
-    
