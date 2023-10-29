@@ -108,7 +108,7 @@ async def get_status(group_list, group_num,id):
                 await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 了。"))
                 dirpath.write_text(json.dumps(group_list))
             elif "gameextrainfo" in res_info and group_list[group_num][id][0] != -1 and group_list[group_num][id][1] != "":
-                # 如果发现开始玩了而之前也在玩
+                # 如果发现开始玩了而之前也在玩(bot一直在线)
                 if res_info["gameextrainfo"] != group_list[group_num][id][1]:
                     # 如果发现玩的是新游戏
                     timestamp = int(time.time()/60)
@@ -118,7 +118,6 @@ async def get_status(group_list, group_num,id):
                     group_list[group_num][id] = user_info
                     await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 了。"))
                     dirpath.write_text(json.dumps(group_list))
-                pass
             elif "gameextrainfo" not in res_info and group_list[group_num][id][1] != "":
                 # 之前有玩，现在没玩
                 timestamp = int(time.time()/60)
@@ -133,6 +132,17 @@ async def get_status(group_list, group_num,id):
                     await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 玩了 {game_time} 分钟 {group_list[group_num][id][1]} 后不玩了。"))
                 group_list[group_num][id] = user_info
                 dirpath.write_text(json.dumps(group_list))
+                
+            elif  "gameextrainfo" in res_info and group_list[group_num][id][0] == -1 and group_list[group_num][id][1] != "":
+                # 之前有在玩 A，但bot重启了，现在在玩 B
+                timestamp = int(time.time()/60)
+                user_info.append(timestamp)
+                user_info.append(res_info["gameextrainfo"])
+                user_info.append(res_info['personaname'])
+                group_list[group_num][id] = user_info
+                await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 了。"))
+                dirpath.write_text(json.dumps(group_list))
+                
             elif "gameextrainfo" not in res_info and group_list[group_num][id][1] == "":
                 # 一直没玩
                 pass
@@ -281,10 +291,12 @@ async def node_msg(user_id, plain_text):
 
 
 def get_steam_key() -> str:
-    if type(config_dev.steam_web_key) == str:
-        return config_dev.steam_web_key
-    elif type(config_dev.steam_web_key) == list:
-        return random.choice(config_dev.steam_web_key)
-    else:
-        logger.warning("get steam web key error.")
-        return "get steam web key error."
+    try:
+        key = eval(config_dev.steam_web_key)
+        return random.choice(key)
+    except SyntaxError as SE:
+        key = config_dev.steam_web_key
+        return key
+    except Exception as e:
+        logger.warning(f"get steam web key error.{e}")
+        return f"get steam web key error.{e}"

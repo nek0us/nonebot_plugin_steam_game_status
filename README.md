@@ -84,10 +84,22 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_command_priority | 否 | 5 | int | 事件处理函数优先级 |
 
 单个 steam key 配置示例
-[![pPmVANn.png](https://s1.ax1x.com/2023/08/10/pPmVANn.png)](https://imgse.com/i/pPmVANn)
+```bash
+# .env.xxx
+steam_web_key=123456789QWERTYUII123456789
+# or
+steam_web_key="123456789QWERTYUII123456789"
+```
 
 多个 steam key 配置示例
-[![pPmVEhq.png](https://s1.ax1x.com/2023/08/10/pPmVEhq.png)](https://imgse.com/i/pPmVEhq)
+```bash
+# .env.xxx
+steam_web_key='[
+    "123456789QWERTYUII123456789",
+    "123456789",
+    "987654321"
+]'
+```
 
 ## 🎉 使用
 ### 获取SteamID64
