@@ -297,6 +297,8 @@ def get_steam_key() -> str:
     except SyntaxError as SE:
         key = config_dev.steam_web_key
         return key
+    except TypeError as TE:
+        return random.choice(config_dev.steam_web_key)
     except Exception as e:
         logger.warning(f"get steam web key error.{e}")
         return f"get steam web key error.{e}"
