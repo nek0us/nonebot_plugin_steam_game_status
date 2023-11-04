@@ -19,7 +19,7 @@ import asyncio
 from .config import Config,__version__
 
 config_dev = Config.parse_obj(get_driver().config)
-bot_name = list(config_dev.nickname)
+bot_name = list(get_driver().config.nickname)
 if not config_dev.steam_web_key:
     logger.warning("steam_web_key未配置")
 
