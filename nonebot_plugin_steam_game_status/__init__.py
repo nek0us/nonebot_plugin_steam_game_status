@@ -19,6 +19,7 @@ import asyncio
 from .config import Config,__version__
 
 config_dev = Config.parse_obj(get_driver().config)
+bot_name = list(config_dev.nickname)
 if not config_dev.steam_web_key:
     logger.warning("steam_web_key未配置")
 
@@ -127,7 +128,7 @@ async def get_status(group_list, group_num,id):
                 game_time = timestamp - group_list[group_num][id][0]
                 # 判断是否是重启后的结束游戏
                 if group_list[group_num][id][0] == -1:
-                    await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 不再玩 {group_list[group_num][id][1]} 了。但由于Bot重启，记录出现异常，本次下线不统计总游戏时间。"))
+                    await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 不再玩 {group_list[group_num][id][1]} 了。但{random.choice(bot_name)}忘了，不记得玩了多久了。"))
                 else:
                     await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 玩了 {game_time} 分钟 {group_list[group_num][id][1]} 后不玩了。"))
                 group_list[group_num][id] = user_info
