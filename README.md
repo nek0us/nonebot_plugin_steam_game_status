@@ -82,6 +82,13 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 |:-----:|:----:|:----:|:----:|:----:|
 | steam_web_key | 是 | 无 | str 或 list | Steam Api Key |
 | steam_command_priority | 否 | 5 | int | 事件处理函数优先级 |
+| steam_proxy | 否 | None | str | 代理 |
+
+steam_proxy 示例
+```bash
+# .env.xxx
+steam_proxy="http://ip:port"
+```
 
 单个 steam key 配置示例
 ```bash

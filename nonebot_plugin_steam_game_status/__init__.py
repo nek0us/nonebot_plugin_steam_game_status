@@ -93,7 +93,7 @@ async def _():
         json.dump(data, file)
 
 async def get_status(group_list, group_num,id):
-    async with AsyncClient(verify=False) as client:
+    async with AsyncClient(verify=False,proxies=config_dev.steam_proxy) as client:
         try:
             url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + id
             res = await client.get(url,headers=header,timeout=30)
@@ -180,7 +180,7 @@ async def steam_bind_handle(event: MessageEvent, matcher: Matcher, arg: Message 
                 await matcher.finish("steam id格式错误")
         steam_name: str = ""
         try:
-            async with AsyncClient(verify=False) as client:
+            async with AsyncClient(verify=False,proxies=config_dev.steam_proxy) as client:
                 url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
                 res = await client.get(url,headers=header,timeout=30)
             if res.status_code != 200:

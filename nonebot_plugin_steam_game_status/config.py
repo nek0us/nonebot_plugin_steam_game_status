@@ -16,6 +16,7 @@ except Exception:
 class Config(BaseModel):
     steam_web_key: Optional[Union[str, List[str]]] = None
     steam_command_priority: int = 5
+    steam_proxy: Optional[str] = None
     steam_plugin_enabled: bool = True
     
     @validator("steam_web_key")
@@ -32,4 +33,11 @@ class Config(BaseModel):
         if isinstance(v,int) and v >= 1:
             return v
         raise ValueError("命令优先级必须为大于1的整数")
+    
+    
+    @validator("steam_proxy")
+    def check_proxy(cls,v):
+        if isinstance(v,str):
+            logger.info(f"steam_proxy {v} 读取成功")
+            return v
     
