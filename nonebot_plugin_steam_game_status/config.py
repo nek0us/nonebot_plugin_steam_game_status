@@ -22,10 +22,10 @@ class Config(BaseModel):
     @validator("steam_web_key")
     def check_api_key(cls,v):
         if isinstance(v,str):
-            logger.info("steam_web_key 读取成功")
+            logger.success("steam_web_key 读取成功")
             return v
         elif isinstance(v, list) and all(isinstance(item, str) for item in v):
-            logger.info("steam_web_key 列表读取成功")
+            logger.success("steam_web_key 列表读取成功")
             return v
     
     @validator("steam_command_priority")
@@ -38,6 +38,6 @@ class Config(BaseModel):
     @validator("steam_proxy")
     def check_proxy(cls,v):
         if isinstance(v,str):
-            logger.info(f"steam_proxy {v} 读取成功")
+            logger.success(f"steam_proxy {v} 读取成功")
             return v
     
