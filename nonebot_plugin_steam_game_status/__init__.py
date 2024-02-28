@@ -16,6 +16,9 @@ import json
 import time
 from httpx import AsyncClient
 import asyncio
+import blackboxprotobuf
+from collections import OrderedDict
+import base64
 from .config import Config,__version__
 
 config_dev = Config.parse_obj(get_driver().config)
@@ -77,6 +80,7 @@ header = {
     }
 driver = get_driver()
 status = True
+gameid2name = {}
 
 @driver.on_startup
 async def _():
@@ -103,21 +107,27 @@ async def get_status(group_list, group_num,id):
                 # 如果发现开始玩了而之前未玩
                 timestamp = int(time.time()/60)
                 user_info.append(timestamp)
-                user_info.append(res_info["gameextrainfo"])
+                game_name = await gameid_to_name(res_info["gameid"])
+                if game_name == "":
+                    game_name = res_info["gameextrainfo"]
+                user_info.append(game_name)
                 user_info.append(res_info['personaname'])
                 group_list[group_num][id] = user_info
-                await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 了。"))
+                await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 开始玩 {game_name} 了。"))
                 dirpath.write_text(json.dumps(group_list))
             elif "gameextrainfo" in res_info and group_list[group_num][id][0] != -1 and group_list[group_num][id][1] != "":
                 # 如果发现开始玩了而之前也在玩(bot一直在线)
-                if res_info["gameextrainfo"] != group_list[group_num][id][1]:
+                game_name = await gameid_to_name(res_info["gameid"])
+                if game_name == "":
+                    game_name = res_info["gameextrainfo"]
+                if game_name != group_list[group_num][id][1]:
                     # 如果发现玩的是新游戏
                     timestamp = int(time.time()/60)
                     user_info.append(timestamp)
-                    user_info.append(res_info["gameextrainfo"])
+                    user_info.append(game_name)
                     user_info.append(res_info['personaname'])
                     group_list[group_num][id] = user_info
-                    await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 又开始玩 {res_info['gameextrainfo']} 了。"))
+                    await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 又开始玩 {game_name} 了。"))
                     dirpath.write_text(json.dumps(group_list))
             elif "gameextrainfo" not in res_info and group_list[group_num][id][1] != "":
                 # 之前有玩，现在没玩
@@ -136,12 +146,15 @@ async def get_status(group_list, group_num,id):
                 
             elif  "gameextrainfo" in res_info and group_list[group_num][id][0] == -1 and group_list[group_num][id][1] != "":
                 # 之前有在玩 A，但bot重启了，现在在玩 B
+                game_name = await gameid_to_name(res_info["gameid"])
+                if game_name == "":
+                    game_name = res_info["gameextrainfo"]
                 timestamp = int(time.time()/60)
                 user_info.append(timestamp)
-                user_info.append(res_info["gameextrainfo"])
+                user_info.append(game_name)
                 user_info.append(res_info['personaname'])
                 group_list[group_num][id] = user_info
-                await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 开始玩 {res_info['gameextrainfo']} 了。"))
+                await tools.send_group_msg_by_bots(group_id=int(group_num),msg=Message(f"{res_info['personaname']} 开始玩 {game_name} 了。"))
                 dirpath.write_text(json.dumps(group_list))
                 
             elif "gameextrainfo" not in res_info and group_list[group_num][id][1] == "":
@@ -303,3 +316,26 @@ def get_steam_key() -> str:
     except Exception as e:
         logger.warning(f"get steam web key error.{e}")
         return f"get steam web key error.{e}"
+
+
+async def gameid_to_name(gameid: str) -> str:
+    '''获取游戏中文名'''
+    if gameid in gameid2name:
+        return gameid2name[gameid]
+    async with AsyncClient(verify=False,proxies=config_dev.steam_proxy) as client:
+        try:
+            typedef = OrderedDict([('1', OrderedDict([('name', ''), ('type', 'message'), ('field_order', ['1']), ('message_typedef', OrderedDict([('1', OrderedDict([('name', ''), ('type', 'int'), ('example_value_ignored', 0)]))]))])), ('2', OrderedDict([('name', ''), ('type', 'message'), ('field_order', ['1', '3', '4']), ('message_typedef', OrderedDict([('1', OrderedDict([('name', ''), ('type', 'string'), ('example_value_ignored', 'schinese')])), ('3', OrderedDict([('name', ''), ('type', 'string'), ('example_value_ignored', 'CN')])), ('4', OrderedDict([('name', ''), ('type', 'int'), ('example_value_ignored', 1)]))]))])), ('3', OrderedDict([('name', ''), ('type', 'message'), ('field_order', ['1', '5']), ('message_typedef', OrderedDict([('1', OrderedDict([('name', ''), ('type', 'int'), ('example_value_ignored', 1)])), ('5', OrderedDict([('name', ''), ('type', 'int'), ('example_value_ignored', 1)]))]))]))])
+            jsonstr = '{"1":{"1":' + gameid + '},"2":{"1":"schinese","3":"CN","4":1},"3":{"1":1,"5":1}}'
+            input_protobuf_encoded = blackboxprotobuf.protobuf_from_json(jsonstr,typedef)
+            input_protobuf_encoded = base64.b64encode(input_protobuf_encoded).decode()
+            url = "https://api.steampowered.com/IStoreBrowseService/GetItems/v1?origin=https:%2F%2Fstore.steampowered.com&input_protobuf_encoded=" + input_protobuf_encoded
+            res = await client.get(url,headers=header,timeout=30)
+            message, typedef = blackboxprotobuf.protobuf_to_json(res.content)
+            res_info = json.loads(message)
+            name = res_info["1"]["6"]
+            if name != "":
+                gameid2name[gameid] = name
+            return name
+        except Exception as e:
+            logger.error(f"get game name failed.{e}")
+            return ""
