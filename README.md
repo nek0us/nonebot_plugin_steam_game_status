@@ -143,6 +143,10 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 2.不支持播报 Steam 隐身状态下进行的游戏
 
 ## 更新记录
+2024.04.28
+1. steam列表 合并消息优化
+
+
 2024.02.29
 1. 新增游戏中文名播报，感谢 [6DDUU6](https://github.com/6DDUU6) 的 [PR](https://github.com/nek0us/nonebot_plugin_steam_game_status/pull/18)
 2. 顺应 Nonebot 规范，缓存文件迁移至用户目录下，详见 [plugin-localstore](https://github.com/nonebot/plugin-localstore)

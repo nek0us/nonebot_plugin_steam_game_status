@@ -22,7 +22,7 @@ from nonebot_plugin_sendmsg_by_bots import tools
 require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler
 from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN,GROUP_OWNER
-from nonebot.adapters.onebot.v11 import Message,MessageEvent,Bot,GroupMessageEvent
+from nonebot.adapters.onebot.v11 import Message,MessageEvent,Bot,GroupMessageEvent,MessageSegment
 
 config_dev = Config.parse_obj(get_driver().config)
 bot_name = list(get_driver().config.nickname)
@@ -284,7 +284,12 @@ async def steam_bind_list_handle(bot: Bot, event: MessageEvent):
         try:
             msg = []
             for steam_id in group_list[str(event.group_id)]["user_list"]:
-                msg += await node_msg(event.user_id,f"Steam ID：{steam_id}\nName：{steam_list[steam_id][2]}")
+                # msg += await node_msg(event.user_id,f"Steam ID：{steam_id}\nName：{steam_list[steam_id][2]}")
+                msg += MessageSegment.node_custom(
+                    user_id=event.user_id,
+                    nickname=str(index+1),
+                    content=Message(MessageSegment.text(f"Steam ID：{steam_id}\nName：{steam_list[steam_id][2]}"))
+                )
             await bot.send_group_forward_msg(group_id=event.group_id,messages=msg)
         except Exception as e:
             logger.debug(f"Steam 列表合并消息发送出错，错误：{e}")
