@@ -82,6 +82,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 |:-----:|:----:|:----:|:----:|:----:|
 | steam_web_key | 是 | 无 | str 或 list | Steam Api Key |
 | steam_command_priority | 否 | 5 | int | 事件处理函数优先级 |
+| steam_interval | 否 | 1 | int | steam查询间隔，单位分钟 |
 | steam_proxy | 否 | None | str | 代理 |
 
 steam_proxy 示例
@@ -128,9 +129,16 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 |:-----:|:----:|:----:|:----:|:------------------:|
 | steam绑定/steam添加/steam.add | 否 | 群聊 | 群员 | 后加个人SteamID64或好友代码 |    
 | steam解绑/steam删除/steam.del | 否 | 群聊 | 群员 |   后加个人SteamID64    |   
-| steam列表/steam绑定列表 | 否 | 群聊 | 超管/群管 |       管理员命令        |    
+| steam列表/steam绑定列表 | 否 | 群聊 | 超管/群管 |       管理员命令，展示群内播报列表        |    
+| steam屏蔽 | 否 | 群聊 | 超管/群管 |       管理员命令，后加完整游戏名称        |    
+| steam恢复 | 否 | 群聊 | 超管/群管 |       管理员命令，后加完整游戏名称         |    
+| steam排除列表 | 否 | 群聊 | 超管/群管 |       管理员命令，展示屏蔽的游戏列表        |    
 | steam播报开启/steam播报打开 | 否 | 群聊 | 超管/群管 |       管理员命令        |    
 | steam播报关闭/steam播报停止 | 否 | 群聊 | 超管/群管 |       管理员命令        |  
+
+### 默认屏蔽游戏/工具名
+["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
+
 
 ## 创意来源
 
@@ -138,11 +146,18 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 
 ## 注意事项
 
-1.不支持播报非 Steam 游戏
+1. 不支持播报非 Steam 游戏
+2. 不支持播报 Steam 隐身状态下进行的游戏
+3. 在屏蔽游戏间切换的非屏蔽游戏也不会播报
 
-2.不支持播报 Steam 隐身状态下进行的游戏
+
 
 ## 更新记录
+2024.06.23
+1. 添加`屏蔽游戏`相关功能
+2. 修复steam列表问题
+
+
 2024.04.28
 1. steam列表 合并消息优化
 

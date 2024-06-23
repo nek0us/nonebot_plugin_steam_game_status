@@ -16,6 +16,7 @@ except Exception:
 class Config(BaseModel):
     steam_web_key: Optional[Union[str, List[str]]] = None
     steam_command_priority: int = 5
+    steam_interval: int = 1
     steam_proxy: Optional[str] = None
     steam_plugin_enabled: bool = True
     
@@ -34,6 +35,11 @@ class Config(BaseModel):
             return v
         raise ValueError("命令优先级必须为大于1的整数")
     
+    @validator("steam_interval")
+    def check_steam_interval(cls,v):
+        if isinstance(v,int) and v >= 1:
+            return v
+        raise ValueError("steam查询间隔必须为大于0的整数")    
     
     @validator("steam_proxy")
     def check_proxy(cls,v):
