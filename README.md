@@ -84,6 +84,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_command_priority | 否 | 5 | int | 事件处理函数优先级 |
 | steam_interval | 否 | 1 | int | steam查询间隔，单位分钟 |
 | steam_proxy | 否 | None | str | 代理 |
+| steam_link_enabled | 否 | true | bool | 链接识别全局开关 |
 
 steam_proxy 示例
 ```bash
@@ -134,7 +135,8 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 | steam恢复 | 否 | 群聊 | 超管/群管 |       管理员命令，后加完整游戏名称         |    
 | steam排除列表 | 否 | 群聊 | 超管/群管 |       管理员命令，展示屏蔽的游戏列表        |    
 | steam播报开启/steam播报打开 | 否 | 群聊 | 超管/群管 |       管理员命令        |    
-| steam播报关闭/steam播报停止 | 否 | 群聊 | 超管/群管 |       管理员命令        |  
+| steam播报关闭/steam播报停止 | 否 | 群聊 | 超管/群管 |       管理员命令        |   
+| 任意steam商店链接 | 否 | 群聊 | 群员 |       获取游戏信息        |  
 
 ### 默认屏蔽游戏/工具名
 ["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
@@ -149,10 +151,17 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 1. 不支持播报非 Steam 游戏
 2. 不支持播报 Steam 隐身状态下进行的游戏
 3. 在屏蔽游戏间切换的非屏蔽游戏也不会播报
+4. 屏蔽游戏列表以群区分管理
 
 
 
 ## 更新记录
+2024.06.26
+1. 优化播报后数据同步优先级
+2. 添加链接识别功能
+3. 优化日志等级
+
+
 2024.06.23
 1. 添加`屏蔽游戏`相关功能
 2. 修复steam列表问题
