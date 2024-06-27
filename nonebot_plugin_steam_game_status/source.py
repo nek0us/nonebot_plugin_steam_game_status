@@ -51,17 +51,22 @@ if not old_dirpath.exists():
     else:
         # 存在，准备好的新用户
         # 看看exclude在不在
+        group_tmp = json.loads(new_file_group.read_text(encoding='utf8'))
         if not exclude_game_file.exists():
             game_cache_file.write_text("{}")
-            group_tmp = json.loads(new_file_group.read_text(encoding='utf8'))
             if group_tmp == {}:
-                
                 exclude_game_file.write_text("{}")
             else:
                 exclude_game_tmp = {}
                 for group_id in group_tmp:
                     exclude_game_tmp[group_id] = exclude_game_default
                 exclude_game_file.write_text(json.dumps(exclude_game_tmp))
+        else:
+            exclude_game_tmp = json.loads(exclude_game_file.read_text(encoding='utf8'))
+            for group_id in group_tmp:
+                if group_id not in exclude_game_tmp:
+                    exclude_game_tmp[group_id] = exclude_game_default
+            exclude_game_file.write_text(json.dumps(exclude_game_tmp))
 else:
     # 存在旧文件，看看新的在不在
     if not new_file_steam.exists():

@@ -238,24 +238,27 @@ async def get_status(steam_id_to_groups,steam_list,steam_id):
 @scheduler.scheduled_job("interval", minutes=config_dev.steam_interval, id="steam", misfire_grace_time=(config_dev.steam_interval*60-1))
 async def now_steam():
     if config_dev.steam_web_key:
-        global steam_list
-        task_list = []
-        # 初始化最终的反向字典
-        steam_id_to_groups = {}
-        # 遍历group_list中的每个group_id及其数据
-        for group_id, group_data in group_list.items():
-            if group_data['status']:  # 只处理status为true的group
-                user_list = group_data['user_list']
-                for steam_id in user_list:
-                    if steam_id not in steam_id_to_groups:
-                        steam_id_to_groups[steam_id] = []
-                    steam_id_to_groups[steam_id].append(group_id)
-            
-        for steam_id in steam_id_to_groups:
-            task_list.append(get_status(steam_id_to_groups,steam_list,steam_id))
-        await asyncio.wait_for(asyncio.gather(*task_list), timeout=(config_dev.steam_interval*60-20))
-        
-        new_file_steam.write_text(json.dumps(steam_list))
+        try:
+            global steam_list
+            task_list = []
+            # 初始化最终的反向字典
+            steam_id_to_groups = {}
+            # 遍历group_list中的每个group_id及其数据
+            for group_id, group_data in group_list.items():
+                if group_data['status']:  # 只处理status为true的group
+                    user_list = group_data['user_list']
+                    for steam_id in user_list:
+                        if steam_id not in steam_id_to_groups:
+                            steam_id_to_groups[steam_id] = []
+                        steam_id_to_groups[steam_id].append(group_id)
+                
+            for steam_id in steam_id_to_groups:
+                task_list.append(get_status(steam_id_to_groups,steam_list,steam_id))
+            await asyncio.wait_for(asyncio.gather(*task_list), timeout=(config_dev.steam_interval*60-20))
+        except Exception as e:
+            logger.debug(f"更新steam状态出现问题:{e}")
+        finally:
+            new_file_steam.write_text(json.dumps(steam_list))
 
          
 steam_bind = on_command("steam绑定", aliases={"steam.add", "steam添加","Steam绑定","Steam.add","Steam添加"}, priority=config_dev.steam_command_priority)
@@ -507,7 +510,8 @@ async def gameid_to_name(gameid: str) -> str:
             return ""
         
 def save_data():
-    global steam_list,group_list
+    global steam_list,group_list,exclude_game
     new_file_group.write_text(json.dumps(group_list)) 
-    new_file_steam.write_text(json.dumps(steam_list))  
+    new_file_steam.write_text(json.dumps(steam_list)) 
+    exclude_game_file.write_text(json.dumps(exclude_game)) 
     
