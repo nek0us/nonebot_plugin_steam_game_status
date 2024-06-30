@@ -1,15 +1,13 @@
 import re
 import json
 import time
-import base64
 import random
 import asyncio
-import blackboxprotobuf
 
+from typing import Optional
 from httpx import AsyncClient
 from nonebot.log import logger
 from nonebot.matcher import Matcher
-from collections import OrderedDict
 from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
 from nonebot.exception import MatcherException
@@ -100,16 +98,22 @@ def get_id(url:str = RegexStr()):
         return app_id_match.group(1)
     return None
 
-steam_link_re = on_regex(r"store.steampowered.com/app/\d+",rule=steam_link_rule,block=False,priority=config_dev.steam_command_priority)
-@steam_link_re.handle()
-async def steam_link_handle(matcher: Matcher,event: GroupMessageEvent,app_id: str = Depends(get_id)):
+async def get_game_info(app_id: str) -> dict:
     url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=cn"
     try:
         async with AsyncClient(headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/111.0","Accept-Language":"zh-CN,zh",},proxies=config_dev.steam_proxy) as client:
             res = await client.get(url)
             res_json: dict = res.json()[app_id]
+            return res_json
     except Exception as e:
-        logger.warning(f"steam链接识别失败，异常为：{e}")
+        return {'error':e}
+
+steam_link_re = on_regex(r"store.steampowered.com/app/\d+",rule=steam_link_rule,block=False,priority=config_dev.steam_command_priority)
+@steam_link_re.handle()
+async def steam_link_handle(matcher: Matcher,event: GroupMessageEvent,app_id: str = Depends(get_id)):
+    res_json = await get_game_info(app_id)
+    if 'error' in res_json:
+        logger.warning(f"steam链接识别失败，异常为：{res_json['error']}")
         await matcher.finish("steam链接失败，请检查日志输出")
     if not res_json['success']:
         logger.info(f"steam链接游戏信息获取失败，疑似appid错误：{app_id}")
@@ -149,7 +153,7 @@ async def get_status(steam_id_to_groups,steam_list,steam_id):
                 # 如果发现开始玩了而之前未玩
                 timestamp = int(time.time()/60)
                 user_info.append(timestamp)
-                game_name = await gameid_to_name(res_info["gameid"])
+                game_name = await gameid_to_name(res_info["gameid"],res_info["gameextrainfo"])
                 if game_name == "":
                     game_name = res_info["gameextrainfo"]
                 user_info.append(game_name)
@@ -164,7 +168,7 @@ async def get_status(steam_id_to_groups,steam_list,steam_id):
                     
             elif "gameextrainfo" in res_info and steam_list[steam_id][0] != -1 and steam_list[steam_id][1] != "":
                 # 如果发现开始玩了而之前也在玩(bot一直在线)
-                game_name = await gameid_to_name(res_info["gameid"])
+                game_name = await gameid_to_name(res_info["gameid"],res_info["gameextrainfo"])
                 if game_name == "":
                     game_name = res_info["gameextrainfo"]
                 if game_name != steam_list[steam_id][1]:
@@ -211,7 +215,7 @@ async def get_status(steam_id_to_groups,steam_list,steam_id):
                 
             elif  "gameextrainfo" in res_info and steam_list[steam_id][0] == -1 and steam_list[steam_id][1] != "":
                 # 之前有在玩 A，但bot重启了，现在在玩 B
-                game_name = await gameid_to_name(res_info["gameid"])
+                game_name = await gameid_to_name(res_info["gameid"],res_info["gameextrainfo"])
                 if game_name == "":
                     game_name = res_info["gameextrainfo"]
                 game_name_old = steam_list[steam_id][1]
@@ -484,30 +488,24 @@ def get_steam_key() -> str:
         return f"get steam web key error.{e}"
 
 
-async def gameid_to_name(gameid: str) -> str:
+async def gameid_to_name(gameid: str,origin_name: Optional[str] = None) -> str:
     '''获取游戏中文名'''
     global gameid2name
     if gameid in gameid2name:
         return gameid2name[gameid]
-    async with AsyncClient(verify=False,proxies=config_dev.steam_proxy) as client:
-        try:
-            typedef = OrderedDict([('1', OrderedDict([('name', ''), ('type', 'message'), ('field_order', ['1']), ('message_typedef', OrderedDict([('1', OrderedDict([('name', ''), ('type', 'int'), ('example_value_ignored', 0)]))]))])), ('2', OrderedDict([('name', ''), ('type', 'message'), ('field_order', ['1', '3', '4']), ('message_typedef', OrderedDict([('1', OrderedDict([('name', ''), ('type', 'string'), ('example_value_ignored', 'schinese')])), ('3', OrderedDict([('name', ''), ('type', 'string'), ('example_value_ignored', 'CN')])), ('4', OrderedDict([('name', ''), ('type', 'int'), ('example_value_ignored', 1)]))]))])), ('3', OrderedDict([('name', ''), ('type', 'message'), ('field_order', ['1', '5']), ('message_typedef', OrderedDict([('1', OrderedDict([('name', ''), ('type', 'int'), ('example_value_ignored', 1)])), ('5', OrderedDict([('name', ''), ('type', 'int'), ('example_value_ignored', 1)]))]))]))])
-            jsonstr = '{"1":{"1":' + gameid + '},"2":{"1":"schinese","3":"CN","4":1},"3":{"1":1,"5":1}}'
-            input_protobuf_encoded = blackboxprotobuf.protobuf_from_json(jsonstr,typedef) # type: ignore
-            input_protobuf_encoded = base64.b64encode(input_protobuf_encoded).decode()
-            url = "https://api.steampowered.com/IStoreBrowseService/GetItems/v1?origin=https:%2F%2Fstore.steampowered.com&input_protobuf_encoded=" + input_protobuf_encoded
-            res = await client.get(url,headers=header,timeout=30)
-            message, typedef = blackboxprotobuf.protobuf_to_json(res.content)
-            res_info = json.loads(message)
-            name = res_info["1"]["6"]
-            if name != "":
-                gameid2name[gameid] = name
-                gameid2name[name] = gameid
-                game_cache_file.write_text(json.dumps(gameid2name))
-            return name
-        except Exception as e:
-            logger.debug(f"get game name failed.{e}")
-            return ""
+    res_json = await get_game_info(gameid)
+    if 'error' in res_json:
+        logger.debug(f"get game name failed.{res_json['error']}")
+        return ""
+    if not res_json['success']:
+        logger.debug(f"get game name no success.{res_json}")
+        return ""
+    name = res_json['data']['name']
+    if origin_name != name:
+        gameid2name[gameid] = name
+        gameid2name[name] = gameid
+        game_cache_file.write_text(json.dumps(gameid2name))
+    return name
         
 def save_data():
     global steam_list,group_list,exclude_game
