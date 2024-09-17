@@ -141,7 +141,7 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 ### 默认屏蔽游戏/工具名
 ["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
 
-> 目前建议手动添加 `Death Lock` ，待发售完善后再移除，否则容易刷屏
+> 目前建议手动添加 `Dead Lock` ，待发售完善后再移除，否则容易刷屏
 
 
 ## 创意来源
