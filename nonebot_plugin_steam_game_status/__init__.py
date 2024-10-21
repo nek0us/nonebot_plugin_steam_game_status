@@ -142,7 +142,26 @@ async def _():
     for steam_id in steam_list:
         if isinstance(steam_list[steam_id], list) and steam_list[steam_id][0] != 0:
             steam_list[steam_id][0] = -1  # -1 为特殊时间用来判断是否重启
-    
+
+        # 修复用户id异常
+        if isinstance(steam_list[steam_id],list) and steam_list[steam_id] == [-1]:
+            steam_name: str = ""
+            try:
+                async with AsyncClient(verify=False,proxies=config_dev.steam_proxy) as client:
+                    url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
+                    res = await client.get(url,headers=header,timeout=30)
+                if res.status_code != 200:
+                    logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 http状态码不为200: {res.status_code}")
+                    continue
+                if json.loads(res.text)["response"]["players"] == []:
+                    logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 获取到的用户信息为空")
+                    continue
+                steam_name = json.loads(res.text)["response"]["players"][0]['personaname']
+            except Exception as e:
+                logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 : {e}")
+                continue
+            steam_list[steam_id] = [0,"",steam_name]
+            logger.debug(f"Steam id: {steam_id},name: {steam_name} 异常，修复成功")
 
 async def get_status(steam_id_to_groups,steam_list,steam_id):
     global exclude_game
@@ -246,7 +265,7 @@ async def get_status(steam_id_to_groups,steam_list,steam_id):
     except Exception as e:
         logger.debug(f"steam id:{steam_id} 查询状态失败，{e} \n{res.text}")
     finally:
-        if user_info:
+        if len(user_info) == 3:
             steam_list[steam_id] = user_info
 
 
