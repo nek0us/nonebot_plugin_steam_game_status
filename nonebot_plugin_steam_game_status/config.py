@@ -20,6 +20,8 @@ class Config(BaseModel):
     steam_proxy: Optional[str] = None
     steam_plugin_enabled: bool = True
     steam_link_enabled: bool = True
+    steam_area_game: bool = False
+    steam_link_r18_game: bool = False
     
     @validator("steam_web_key", always=True, pre=True)
     def check_api_key(cls,v):
@@ -59,9 +61,25 @@ class Config(BaseModel):
     def check_steam_link_enabled(cls,v):
         if isinstance(v,bool):
             if v:
-                logger.success("steam 链接识别 已开启")
+                logger.success("steam_link_enabled 链接识别 已开启")
             else:
-                logger.success("steam 链接识别 已关闭")
+                logger.success("steam_link_enabled 链接识别 已关闭")
             return v
         
+    @validator("steam_area_game", always=True, pre=True)
+    def check_steam_area_game(cls,v):
+        if isinstance(v,bool):
+            if v:
+                logger.success("steam_area_game 其它区游戏识别 已开启")
+            else:
+                logger.success("steam_area_game 其它区游戏识别 已关闭")
+            return v      
         
+    @validator("steam_link_r18_game", always=True, pre=True)
+    def check_steam_link_r18_game(cls,v):
+        if isinstance(v,bool):
+            if v:
+                logger.success("steam_link_r18_game 识别 已开启")
+            else:
+                logger.success("steam_link_r18_game 识别 已关闭")
+            return v

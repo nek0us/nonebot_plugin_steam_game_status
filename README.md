@@ -85,6 +85,8 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_interval | 否 | 1 | int | steam查询间隔，单位分钟 |
 | steam_proxy | 否 | None | str | 代理 |
 | steam_link_enabled | 否 | true | bool | 链接识别全局开关 |
+| steam_area_game | 否 | false | bool | 识别其它区游戏 |
+| steam_link_r18_game | 否 | false | bool | 识别r18游戏 |
 
 steam_proxy 示例
 ```bash
@@ -158,6 +160,11 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 
 
 ## 更新记录
+2025.07.27
+1. 修复onebot适配器故障导致无法推送消息
+2. 优化游戏链接识别显示效果
+3. 修复`httpx 0.28.1`版本代理参数
+
 2024.10.21
 1. 修复用户id数据异常
 

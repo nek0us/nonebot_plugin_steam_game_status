@@ -24,7 +24,7 @@ from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN,GROUP_OWNER
 from nonebot.adapters.onebot.v11 import Message,MessageEvent,Bot,GroupMessageEvent,MessageSegment
 
 from .config import Config,__version__
-from .source import new_file_group,new_file_steam,game_cache_file,exclude_game_file,exclude_game_default
+from .source import new_file_group,new_file_steam,game_cache_file,exclude_game_file,exclude_game_default,HTML_TEMPLATE
 
 config_dev = get_plugin_config(Config)
 bot_name = list(get_driver().config.nickname)
@@ -99,14 +99,49 @@ def get_id(url:str = RegexStr()):
     return None
 
 async def get_game_info(app_id: str) -> dict:
-    url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc=cn"
-    try:
-        async with AsyncClient(headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/111.0","Accept-Language":"zh-CN,zh",},proxies=config_dev.steam_proxy) as client:
-            res = await client.get(url)
-            res_json: dict = res.json()[app_id]
-            return res_json
-    except Exception as e:
-        return {'error':e}
+    error = {'success': False}
+    async with AsyncClient(headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/111.0","Accept-Language":"zh-CN,zh",},proxy=config_dev.steam_proxy) as client:
+        for location in ["cn", "hk", "tw", "jp", "us"] if config_dev.steam_area_game else ["cn"]:
+            url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc={location}"
+            try:
+                res = await client.get(url)
+                res_json: dict = res.json()[app_id]
+                if not res_json['success']:
+                    logger.debug(f"{location}区域未找到steam游戏应用id{app_id}")
+                    continue
+                else:
+                    logger.debug(f"{location}区域找到steam游戏应用id{app_id}")
+                    return res_json
+            except Exception as e:
+                error = {'error':e}
+    return error
+
+async def generate_image(html_content: str, width: int = 500) -> bytes:
+    """生成图片
+    
+    Args:
+        html_content (str): HTML内容
+        width (int): 内容宽度，默认500px
+    
+    Returns:
+        bytes: 图片二进制数据
+    """
+    # 格式化模板，插入内容和宽度
+    html = HTML_TEMPLATE.format(
+        width=width,  # 插入宽度值
+        content=html_content  # 插入HTML内容
+    )
+    
+    # 使用html_to_pic生成图片
+    return await html_to_pic(
+        html=html,
+        wait=1000,
+        type="jpeg",
+        quality=90,
+        device_scale_factor=2,
+        screenshot_timeout=30_000,
+        viewport={"width": width, "height": 100}  # 使用相同的宽度
+    )
 
 steam_link_re = on_regex(r"store.steampowered.com/app/\d+",rule=steam_link_rule,block=False,priority=config_dev.steam_command_priority)
 @steam_link_re.handle()
@@ -117,23 +152,64 @@ async def steam_link_handle(matcher: Matcher,event: MessageEvent,app_id: str = D
         await matcher.finish("steam链接失败，请检查日志输出")
     if not res_json['success']:
         logger.info(f"steam链接游戏信息获取失败，疑似appid错误：{app_id}")
-        await matcher.finish("没有找到这个游戏",)
+        await matcher.finish("没有找到这个游戏",reply_message=True)
+
     tmp = res_json['data']
-    forward_name = ["预览","名称","价格","介绍","玩"]
+
+    if not config_dev.steam_link_r18_game:
+        if "ratings" in tmp:
+            if "steam_germany" in tmp["ratings"]:
+                if tmp["ratings"]["steam_germany"]['rating'] == "BANNED":
+                    logger.info(f"steam appid:{app_id} 根据r18设置被过滤")
+                    await matcher.finish("这个禁止！",reply_message=True)
+
+    forward_name = ["预览","名称","价格","分级","介绍","语言","标签","发售时间","","截图"] #,"DLC"
+
+    png = await generate_image(tmp['detailed_description'], 400)
+    screenshots_url = [screenshots["path_full"] for screenshots in tmp["screenshots"]]
+    screenshots_img = []
+    dlc_img = []
+    async with AsyncClient(proxy=config_dev.steam_proxy,timeout=15) as client:
+        logger.debug(f"steam app_id:{app_id} 开始获取图片")
+        res = await client.get(tmp['header_image'])
+        header_image = res.content #  + random_int.encode()
+        for url in screenshots_url:
+            res = await client.get(url)
+            screenshots_img.append(res.content) #  + random_int.encode())
+        if "dlc" in tmp:
+            if tmp["dlc"]:
+                logger.debug(f"steam app_id:{app_id} 存在dlc: {tmp['dlc']}")
+                for id in tmp["dlc"]:
+                    res = await client.get(f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{id}/header.jpg")
+                    dlc_img.append(res.content) #  + random_int.encode())
     msgs = [
-        MessageSegment.image(tmp['header_image']),
+        MessageSegment.image(header_image),
         MessageSegment.text(tmp['name']),
-        MessageSegment.text('免费' if tmp['is_free'] else (f"现价：{tmp['price_overview']['final_formatted']}\n原价：{tmp['price_overview']['initial_formatted']}\n折扣：{tmp['package_groups'][0]['subs'][0]['percent_savings_text']}" if 'initial_formatted' not in tmp['price_overview'] else tmp['price_overview']['final_formatted']) if 'price_overview' in tmp else random.choice(['即将推出','还没推出','还没发售'])),
-        MessageSegment.image(await html_to_pic(tmp['about_the_game'])),
-        MessageSegment.text((f"{random.choice(bot_name)}也想玩" if tmp['is_free'] else f"要送给{random.choice(bot_name)}吗？") if 'price_overview' in tmp else (f"{random.choice(bot_name)}也想玩" if tmp['is_free'] else f"迫不及待想玩啦，发售时会送给{random.choice(bot_name)}吗？"))
+        MessageSegment.text('免费' if tmp['is_free'] else (f"现价：{tmp['price_overview']['final_formatted']}\n原价：{tmp['price_overview']['initial_formatted']}\n折扣：{tmp['package_groups'][0]['subs'][0]['percent_savings_text']}" if 'initial_formatted' in tmp['price_overview'] else tmp['price_overview']['final_formatted']) if 'price_overview' in tmp else random.choice(['即将推出','还没推出','还没发售'])),
+MessageSegment.text(f"分级：{tmp["ratings"]["dejus"]["rating"]}" if "ratings" in tmp and "dejus" in tmp["ratings"] and "rating" in tmp["ratings"]["dejus"] else "暂无分级"),
+        MessageSegment.image(png),
+        MessageSegment.text(tmp["supported_languages"].replace("<strong>","").replace("</strong>","").replace("<br>","") if "supported_languages" in tmp else "支持语言：未知"),
+        MessageSegment.text("，".join([x["description"] for x in tmp["genres"]])),
+        MessageSegment.text(tmp["release_date"]["date"] if tmp["release_date"]["date"] else "未知发售时间"),
+        MessageSegment.text((f"{random.choice(bot_name)}也想玩" if tmp['is_free'] else f"要送给{random.choice(bot_name)}吗？") if 'price_overview' in tmp else (f"{random.choice(bot_name)}也想玩" if tmp['is_free'] else f"迫不及待想玩啦，发售时会送给{random.choice(bot_name)}吗？")),
+        
+        # MessageSegment.text("DLC") + [MessageSegment.image(file=img) for img in dlc_img] if dlc_img else MessageSegment.text("无DLC"),
+        Message([MessageSegment.image(file=img) for img in screenshots_img]),
     ]
+    # msgs += msis
     messages = []
     for name,msg in zip(forward_name,msgs):
+        # if name == "DLC":
+        #     for x in msg:
+        #         messages.append(MessageSegment.node_custom(user_id=event.self_id,nickname=name,content=Message(x)))
+        #     continue
         messages.append(MessageSegment.node_custom(user_id=event.self_id,nickname=name,content=Message(msg)))
+    
     if isinstance(event, GroupMessageEvent):
         await tools.send_group_forward_msg_by_bots_once(group_id=event.group_id,node_msg=messages,bot_id=str(event.self_id))
     else:
         await tools.send_private_forward_msg_by_bots_once(user_id=event.user_id,node_msg=messages,bot_id=str(event.self_id))
+    logger.debug(f"steam app_id: {app_id} 解析完成")
 
 
 @driver.on_startup
@@ -147,16 +223,16 @@ async def _():
         if isinstance(steam_list[steam_id],list) and steam_list[steam_id] == [-1]:
             steam_name: str = ""
             try:
-                async with AsyncClient(verify=False,proxies=config_dev.steam_proxy) as client:
+                async with AsyncClient(verify=False,proxy=config_dev.steam_proxy) as client:
                     url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
                     res = await client.get(url,headers=header,timeout=30)
-                if res.status_code != 200:
-                    logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 http状态码不为200: {res.status_code}")
-                    continue
-                if json.loads(res.text)["response"]["players"] == []:
-                    logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 获取到的用户信息为空")
-                    continue
-                steam_name = json.loads(res.text)["response"]["players"][0]['personaname']
+                    if res.status_code != 200:
+                        logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 http状态码不为200: {res.status_code}")
+                        continue
+                    if json.loads(res.text)["response"]["players"] == []:
+                        logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 获取到的用户信息为空")
+                        continue
+                    steam_name = json.loads(res.text)["response"]["players"][0]['personaname']
             except Exception as e:
                 logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 : {e}")
                 continue
@@ -167,7 +243,7 @@ async def get_status(steam_id_to_groups,steam_list,steam_id):
     global exclude_game
     user_info = []
     try:
-        async with AsyncClient(verify=False,proxies=config_dev.steam_proxy) as client:
+        async with AsyncClient(verify=False,proxy=config_dev.steam_proxy) as client:
             url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
             res = await client.get(url,headers=header,timeout=30)
             if res.status_code == 200:
@@ -328,7 +404,7 @@ async def steam_bind_handle(event: GroupMessageEvent, matcher: Matcher, arg: Mes
             steam_name = steam_list[steam_id][2]
         else:
             try:
-                async with AsyncClient(verify=False,proxies=config_dev.steam_proxy) as client:
+                async with AsyncClient(verify=False,proxy=config_dev.steam_proxy) as client:
                     url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
                     res = await client.get(url,headers=header,timeout=30)
                 if res.status_code != 200:

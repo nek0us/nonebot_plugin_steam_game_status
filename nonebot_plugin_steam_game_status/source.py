@@ -99,3 +99,104 @@ else:
 
 
 
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width={width}, initial-scale=1.0">
+    <style>
+        /* 全局重置 */
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        /* 页面容器 */
+        html, body {{
+            background-color: #fff;
+            overflow-x: hidden;
+            width: 100%;
+            min-width: {width}px;
+        }}
+        
+        /* 内容容器 - 关键修复 */
+        .container {{
+            width: {width}px;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }}
+        
+        /* 标题样式 */
+        h1, h2, h3 {{
+            margin: 1.5em 0 0.8em;
+            padding-bottom: 0.3em;
+            border-bottom: 1px solid #eee;
+        }}
+        
+        /* 段落样式 */
+        p {{
+            margin: 1em 0;
+            text-align: justify;
+            word-wrap: break-word;
+            overflow-wrap: break-word; /* 确保长单词换行 */
+        }}
+        
+        /* 媒体容器 - 关键修复 */
+        .bb_img_ctn {{
+            margin: 1.5em auto;
+            text-align: center;
+            width: 100%;
+            max-width: {width}px;
+            overflow: hidden; /* 防止内容溢出 */
+        }}
+        
+        /* 图片和视频样式 - 关键修复 */
+        img.bb_img, video.bb_img {{
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }}
+        
+        /* 列表样式 */
+        ul.bb_ul {{
+            padding-left: 2em;
+            margin: 1em 0;
+        }}
+        
+        li {{
+            margin: 0.5em 0;
+        }}
+        
+        /* 强调文本 */
+        strong {{
+            color: #e74c3c;
+        }}
+        
+        /* 特殊元素处理 */
+        br {{
+            display: block;
+            content: "";
+            margin: 0.5em 0;
+        }}
+        
+        /* 修复嵌套问题 */
+        p > p {{
+            margin: 0 !important;
+            padding: 0 !important;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        {content}
+    </div>
+</body>
+</html>
+"""
