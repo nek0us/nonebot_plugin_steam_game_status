@@ -1,4 +1,4 @@
-from pydantic import BaseModel,validator
+from pydantic import BaseModel,validator,field_validator
 from typing import Union, Optional, List
 from nonebot.log import logger
 import sys
@@ -14,17 +14,18 @@ except Exception:
     __version__ = None
 
 class Config(BaseModel):
-    steam_web_key: Optional[Union[str, List[str]]] = None
+    steam_web_key: Union[str, List[str]] = []
     steam_command_priority: int = 5
     steam_interval: int = 1
     steam_proxy: Optional[str] = None
     steam_plugin_enabled: bool = True
     steam_link_enabled: bool = True
-    steam_area_game: bool = False
-    steam_link_r18_game: bool = False
+    steam_area_game: Union[bool, List[str]]= False
+    steam_link_r18_game: Union[bool, List[str]] = False
     
-    @validator("steam_web_key", always=True, pre=True)
-    def check_api_key(cls,v):
+    @field_validator("steam_web_key")
+    @classmethod
+    def check_api_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
         if isinstance(v,str):
             logger.success("steam_web_key 读取成功")
             return v
@@ -33,53 +34,72 @@ class Config(BaseModel):
             return v
         else:
             logger.error("steam_web_key 未配置")
+            raise ValueError("steam_web_key 未配置")
     
-    @validator("steam_command_priority")
-    def check_priority(cls,v):
-        if isinstance(v,int) and v >= 1:
+    @field_validator("steam_command_priority")
+    @classmethod
+    def check_priority(cls,v: int) -> int:
+        if v >= 1:
             return v
         raise ValueError("命令优先级必须为大于0的整数")
     
-    @validator("steam_interval")
-    def check_steam_interval(cls,v):
-        if isinstance(v,int) and v >= 1:
+    @field_validator("steam_interval")
+    @classmethod
+    def check_steam_interval(cls,v: int) -> int:
+        if v >= 1:
             return v
         raise ValueError("steam查询间隔必须为大于0的整数")    
     
-    @validator("steam_proxy")
-    def check_proxy(cls,v):
+    @field_validator("steam_proxy")
+    @classmethod
+    def check_proxy(cls,v:Union[str, None]) -> Union[str, None]:
         if isinstance(v,str):
             logger.success(f"steam_proxy {v} 读取成功")
             return v
+
         
-    @validator("steam_plugin_enabled")
-    def check_steam_plugin_enabled(cls,v):
-        if isinstance(v,bool):
-            return v
+    @field_validator("steam_plugin_enabled")
+    @classmethod
+    def check_steam_plugin_enabled(cls,v: bool) -> bool:
+        return v
         
-    @validator("steam_link_enabled", always=True, pre=True)
-    def check_steam_link_enabled(cls,v):
-        if isinstance(v,bool):
-            if v:
-                logger.success("steam_link_enabled 链接识别 已开启")
-            else:
-                logger.success("steam_link_enabled 链接识别 已关闭")
-            return v
+    @field_validator("steam_link_enabled")
+    @classmethod
+    def check_steam_link_enabled(cls,v: bool) -> bool:
+        if v:
+            logger.success("steam_link_enabled 链接识别 已开启")
+        else:
+            logger.success("steam_link_enabled 链接识别 已关闭")
+        return v
         
-    @validator("steam_area_game", always=True, pre=True)
-    def check_steam_area_game(cls,v):
-        if isinstance(v,bool):
+    @field_validator("steam_area_game")
+    @classmethod
+    def check_steam_area_game(cls,v: Union[bool, List[str]]) -> Union[bool, List[str]]:
+        if isinstance(v, bool):
             if v:
                 logger.success("steam_area_game 其它区游戏识别 已开启")
             else:
                 logger.success("steam_area_game 其它区游戏识别 已关闭")
             return v      
+        elif isinstance(v, list) and all(isinstance(i, str) for i in v):
+            logger.success(f"steam_area_game 其它区游戏识别 已为部分群开启：{' '.join(v)}")
+            return v
+        else:
+            logger.error("steam_area_game 其它区游戏识别 配置错误")
+            raise ValueError("steam_area_game 其它区游戏识别 配置错误")
         
-    @validator("steam_link_r18_game", always=True, pre=True)
-    def check_steam_link_r18_game(cls,v):
-        if isinstance(v,bool):
+    @field_validator("steam_link_r18_game")
+    @classmethod
+    def check_steam_link_r18_game(cls,v: Union[bool, List[str]]) -> Union[bool, List[str]]:
+        if isinstance(v, bool):
             if v:
                 logger.success("steam_link_r18_game 识别 已开启")
             else:
                 logger.success("steam_link_r18_game 识别 已关闭")
             return v
+        elif isinstance(v, list) and all(isinstance(i, str) for i in v):
+            logger.success(f"steam_link_r18_game 识别 已为部分群开启：{' '.join(v)}")
+            return v
+        else:
+            logger.error("steam_link_r18_game 识别 配置错误")
+            raise ValueError("steam_link_r18_game 识别 配置错误")

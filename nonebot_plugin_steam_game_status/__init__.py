@@ -28,8 +28,6 @@ from .source import new_file_group,new_file_steam,game_cache_file,exclude_game_f
 
 config_dev = get_plugin_config(Config)
 bot_name = list(get_driver().config.nickname)
-if not config_dev.steam_web_key:
-    logger.warning("steam_web_key 未配置")
     
 group_list = json.loads(new_file_group.read_text("utf8"))  
 steam_list = json.loads(new_file_steam.read_text("utf8")) 
@@ -88,7 +86,7 @@ driver = get_driver()
 status = True
 
 async def steam_link_rule() -> bool:
-    if config_dev.check_steam_plugin_enabled and config_dev.check_steam_plugin_enabled:
+    if config_dev.steam_plugin_enabled and config_dev.steam_link_enabled:
         return True
     return False
 
@@ -111,6 +109,7 @@ async def get_game_info(app_id: str) -> dict:
                     continue
                 else:
                     logger.debug(f"{location}区域找到steam游戏应用id{app_id}")
+                    res_json["from"] = location
                     return res_json
             except Exception as e:
                 error = {'error':e}
@@ -154,14 +153,26 @@ async def steam_link_handle(matcher: Matcher,event: MessageEvent,app_id: str = D
         logger.info(f"steam链接游戏信息获取失败，疑似appid错误：{app_id}")
         await matcher.finish("没有找到这个游戏",reply_message=True)
 
-    tmp = res_json['data']
+    if res_json["from"] != "cn":
+        if isinstance(config_dev.steam_area_game, bool):
+            if not config_dev.steam_area_game:
+                await matcher.finish("没有找到这个游戏",reply_message=True)
+        else:
+            if event.get_user_id() not in config_dev.steam_area_game:
+                await matcher.finish("没有找到这个游戏",reply_message=True)
 
-    if not config_dev.steam_link_r18_game:
-        if "ratings" in tmp:
-            if "steam_germany" in tmp["ratings"]:
-                if tmp["ratings"]["steam_germany"]['rating'] == "BANNED":
-                    logger.info(f"steam appid:{app_id} 根据r18设置被过滤")
-                    await matcher.finish("这个禁止！",reply_message=True)
+    tmp = res_json['data']
+    if "ratings" in tmp:
+        if "steam_germany" in tmp["ratings"]:
+            if tmp["ratings"]["steam_germany"]['rating'] == "BANNED":
+                if isinstance(config_dev.steam_link_r18_game, bool):
+                    if not config_dev.steam_link_r18_game:
+                        logger.info(f"steam appid:{app_id} 根据r18设置被过滤")
+                        await matcher.finish("这个禁止！",reply_message=True)
+                else:
+                    if event.get_user_id() not in config_dev.steam_link_r18_game:
+                        logger.info(f"steam appid:{app_id} 根据r18设置被过滤，{event.get_user_id()} 不在白名单内")
+                        await matcher.finish("这个禁止！",reply_message=True)
 
     forward_name = ["预览","名称","价格","分级","介绍","语言","标签","发售时间","","截图"] #,"DLC"
 
