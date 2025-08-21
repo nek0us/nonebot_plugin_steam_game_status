@@ -6,8 +6,8 @@ authors = [
     {name = "nek0us", email = "nekouss@mail.com"},
 ]
 license = {text = "GPL3"}
-dependencies = ["nonebot2>=2.0.0", "nonebot-adapter-onebot>=2.1.5", "nonebot-plugin-apscheduler>=0.2.0", "httpx>=0.28.1", "nonebot_plugin_sendmsg_by_bots>=0.2.0","nonebot_plugin_htmlrender>=0.3.1","nonebot_plugin_localstore"]
-requires-python = ">=3.8"
+dependencies = ["nonebot2>=2.0.0", "nonebot-plugin-alconna>=0.57.0", "nonebot-plugin-apscheduler>=0.2.0","nonebot_plugin_htmlrender>=0.3.1","nonebot_plugin_localstore"]
+requires-python = ">=3.10"
 readme = "README.md"
 
 [project.urls]

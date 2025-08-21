@@ -2,7 +2,9 @@ import json
 import shutil
 import os
 from pathlib import Path
+from typing import Dict, List
 from nonebot import require,logger
+from .model import GroupData, UserData
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as store
 
@@ -97,7 +99,24 @@ else:
             new_file_group.write_text(json.dumps(new_json_group))
             logger.success("steam 数据迁移完成")
 
+# 25.08.21 UserData迁移
+steam_list_tmp = json.loads(new_file_steam.read_text("utf8")) 
+if isinstance(steam_list_tmp[next(iter(steam_list_tmp))],List):
+    steam_list_dict = {}
+    for steam_id in steam_list_tmp:
+        steam_list_dict[steam_id] = UserData(
+            time=steam_list_tmp[steam_id][0],
+            game_name=steam_list_tmp[steam_id][1],
+            nickname=steam_list_tmp[steam_id][2]
+            )
+    new_file_steam.write_text(json.dumps(steam_list_dict))
+    logger.success("steam 0.2.0 数据迁移成功")
 
+
+group_list: Dict[str, GroupData] = json.loads(new_file_group.read_text("utf8"))  
+steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8")) 
+gameid2name = json.loads(game_cache_file.read_text("utf8"))
+exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf8"))
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>

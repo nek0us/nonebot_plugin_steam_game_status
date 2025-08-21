@@ -1,12 +1,9 @@
-from pydantic import BaseModel,validator,field_validator
-from typing import Union, Optional, List
 from nonebot.log import logger
-import sys
+from typing import Union, Optional, List
+from pydantic import BaseModel,field_validator
+from nonebot import get_plugin_config, get_driver
 
-if sys.version_info < (3, 10):
-    from importlib_metadata import version
-else:
-    from importlib.metadata import version
+from importlib.metadata import version
 
 try:
     __version__ = version("nonebot_plugin_steam_game_status")
@@ -103,3 +100,6 @@ class Config(BaseModel):
         else:
             logger.error("steam_link_r18_game 识别 配置错误")
             raise ValueError("steam_link_r18_game 识别 配置错误")
+
+config_steam = get_plugin_config(Config)
+bot_name = list(get_driver().config.nickname)

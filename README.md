@@ -17,7 +17,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 <a href="https://pypi.python.org/pypi/nonebot_plugin_steam_game_status">
     <img src="https://img.shields.io/pypi/v/nonebot_plugin_steam_game_status.svg" alt="pypi">
 </a>
-<img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="python">
+<img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="python">
 
 </div>
 
@@ -61,6 +61,11 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
     conda install nonebot-plugin-steam-game-status
 </details>
 <details>
+<summary>uv</summary>
+
+    uv add nonebot-plugin-steam-game-status
+</details>
+<details>
 <summary>更新</summary>
 
     pip install nonebot-plugin-steam-game-status --upgrade
@@ -68,7 +73,9 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 
 打开 nonebot2 项目根目录下的 `pyproject.toml` 文件, 在 `[tool.nonebot]` 部分追加写入
 
-    plugins = ["nonebot_plugin_steam_game_status"]
+    plugins = [
+        "nonebot_plugin_steam_game_status"
+        ]
 
 </details>
 
@@ -85,8 +92,8 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_interval | 否 | 1 | int | steam查询间隔，单位分钟 |
 | steam_proxy | 否 | None | str | 代理 |
 | steam_link_enabled | 否 | true | bool | 链接识别全局开关 |
-| steam_area_game | 否 | false | bool | 识别其它区游戏 |
-| steam_link_r18_game | 否 | false | bool | 识别r18游戏 |
+| steam_area_game | 否 | false | bool/list | 识别其它区游戏 |
+| steam_link_r18_game | 否 | false | bool/list | 识别r18游戏 |
 
 steam_proxy 示例
 ```bash
@@ -108,18 +115,52 @@ steam_web_key="123456789QWERTYUII123456789"
 多个 steam key 配置示例
 ```bash
 # .env.xxx
+# 注意最后一行key后面不能有逗号
 steam_web_key='[
     "123456789QWERTYUII123456789",
     "123456789",
-    "987654321",
+    "987654321"
 ]'
 
 # or 无引号包裹
 steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 
+```
+
+steam_area_game 识别其它区游戏
+```bash
+# .env.xxx
+# 使用布尔值开启或关闭
+steam_area_game=false
+
+# 使用群聊/私聊白名单列表
+steam_area_game='["群号1","群号2"]'
+# or 
+steam_area_game='
+[
+    "群号1",
+    "群号2"
+]'
 
 ```
 
+
+steam_link_r18_game 识别r18游戏
+```bash
+# .env.xxx
+# 使用布尔值开启或关闭
+steam_link_r18_game=false
+
+# 使用群聊/私聊白名单列表
+steam_link_r18_game='["群号1","群号2"]'
+# or 
+steam_link_r18_game='
+[
+    "群号1",
+    "群号2"
+]'
+
+```
 ## 🎉 使用
 ### 获取SteamID64
     Steam 桌面网站或桌面客户端：点开右上角昵称下拉菜单，点击账户明细，即可看到 Steam ID
@@ -160,6 +201,13 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 
 
 ## 更新记录
+2025.08.21 0.2.0
+1. 改用alconna插件实现，支持跨平台适配器
+2. 为链接识别增加白名单配置
+3. 使用驱动器实现，解决代理参数和依赖问题
+4. 小幅度优化数据存储，更新后会自动进行迁移
+
+
 2025.07.27
 1. 修复onebot适配器故障导致无法推送消息
 2. 优化游戏链接识别显示效果
