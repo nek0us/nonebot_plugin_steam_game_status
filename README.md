@@ -164,7 +164,7 @@ steam_link_r18_game='
 
 
 ### 插件依赖于客户端驱动器
-请确保安装并配置使用了客户端驱动器,如
+请确保安装了客户端驱动器,如
 ```bash
 pip install nonebot[aiohttp]
 # 或
