@@ -161,6 +161,17 @@ steam_link_r18_game='
 ]'
 
 ```
+
+
+### 插件依赖于客户端驱动器
+请确保安装并配置使用了客户端驱动器,如
+```bash
+pip install nonebot[aiohttp]
+# 或
+pip install nonebot[httpx]
+ ```
+并配置`DRIVER=~aiohttp`等
+
 ## 🎉 使用
 ### 获取SteamID64
     Steam 桌面网站或桌面客户端：点开右上角昵称下拉菜单，点击账户明细，即可看到 Steam ID
