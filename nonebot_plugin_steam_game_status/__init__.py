@@ -164,7 +164,7 @@ async def steam_link_handle(target: MsgTarget,matcher: Matcher, appid: Match[str
         UniMessage.text(f"分级：{game_data['ratings']['dejus']['rating']}" if "ratings" in game_data and "dejus" in game_data["ratings"] and "rating" in game_data["ratings"]["dejus"] else "暂无分级"),
         UniMessage.image(raw = png),
         UniMessage.text(game_data["supported_languages"].replace("<strong>","").replace("</strong>","").replace("<br>","") if "supported_languages" in game_data else "支持语言：未知"),
-        UniMessage.text("，".join([x["description"] for x in game_data["genres"]])),
+        UniMessage.text("，".join([x["description"] for x in game_data["genres"]]) if "genres" in game_data else "暂无分类描述"),
         UniMessage.text(game_data["release_date"]["date"] if game_data["release_date"]["date"] else "未知发售时间"),
         UniMessage.text((f"{random.choice(bot_name)}也想玩" if game_data['is_free'] else f"要送给{random.choice(bot_name)}吗？") if 'price_overview' in game_data else (f"{random.choice(bot_name)}也想玩" if game_data['is_free'] else f"迫不及待想玩啦，发售时会送给{random.choice(bot_name)}吗？")),
         
