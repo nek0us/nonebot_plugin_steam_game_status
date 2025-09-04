@@ -6,7 +6,7 @@ from typing import List, Optional
 from nonebot import require
 from nonebot.log import logger
 from nonebot.internal.driver import Request
-from nonebot_plugin_alconna.uniseg import MsgTarget
+from nonebot_plugin_alconna.uniseg import MsgTarget, Target
 
 from .model import SafeResponse
 from .utils import config_steam,http_client
@@ -118,3 +118,6 @@ def save_data():
 async def no_private_rule(target: MsgTarget) -> bool:
     return not target.private
         
+async def bot_right(target: Target):
+    group_id = target.id
+    

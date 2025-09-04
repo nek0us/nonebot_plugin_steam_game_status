@@ -1,9 +1,11 @@
 from nonebot import get_driver
 from typing import AsyncIterator
 from contextlib import asynccontextmanager
-from nonebot.internal.driver import HTTPClientMixin,HTTPClientSession
+from nonebot.internal.driver import HTTPClientMixin, HTTPClientSession
+from nonebot_plugin_alconna.uniseg import Target,SupportAdapter
 
 from .config import config_steam
+from .source import group_list
 
 driver = get_driver()
 
@@ -28,4 +30,19 @@ async def http_client(**kwargs) -> AsyncIterator[HTTPClientSession]:
     else:
         raise TypeError("Current driver does not support http client")
 
+def to_enum(s: str) -> SupportAdapter:
+    for member in SupportAdapter:
+        if member.value == s:
+            return member
+    try:
+        return SupportAdapter(s)
+    except ValueError:
+        return SupportAdapter.onebot11
 
+def get_target(group_id: str):
+    adapter_name = group_list[group_id]["adapter"]
+    target = Target(
+        id=group_id,
+        adapter=to_enum(adapter_name)
+        )
+    return target

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, List
 from nonebot import require,logger
-from .model import GroupData, UserData
+from .model import GroupData, GroupData2, UserData
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as store
 
@@ -112,8 +112,25 @@ if isinstance(steam_list_tmp[next(iter(steam_list_tmp))],List):
     new_file_steam.write_text(json.dumps(steam_list_dict))
     logger.success("steam 0.2.0 数据迁移成功")
 
+# 25.09.02 adapter更新
+steam_group_25_09_02: Dict[str, GroupData] = json.loads(new_file_group.read_text("utf8")) 
+value_25_09_02 = next(iter(steam_group_25_09_02.values()), None)
+if value_25_09_02:
+    if "adapter" not in value_25_09_02:
+        steam_group_dict_25_09_02 = {}
+        for group_id in steam_group_25_09_02:
+            steam_group_dict_25_09_02[group_id] = GroupData2(
+                status=steam_group_25_09_02[group_id]["status"],
+                user_list=steam_group_25_09_02[group_id]["user_list"],
+                adapter="OneBot v11"
+            )
+        new_file_group.write_text(json.dumps(steam_group_dict_25_09_02))
+        logger.success("steam 0.2.1 25.09.02 adapter更新数据成功")
 
-group_list: Dict[str, GroupData] = json.loads(new_file_group.read_text("utf8"))  
+
+
+
+group_list: Dict[str, GroupData2] = json.loads(new_file_group.read_text("utf8"))  
 steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8")) 
 gameid2name = json.loads(game_cache_file.read_text("utf8"))
 exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf8"))

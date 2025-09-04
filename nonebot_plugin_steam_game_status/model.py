@@ -6,6 +6,11 @@ class GroupData(TypedDict):
     status: bool
     user_list: List[str]
 
+class GroupData2(TypedDict):
+    status: bool
+    user_list: List[str]
+    adapter: str
+
 class UserData(TypedDict):
     time: int
     game_name: str
