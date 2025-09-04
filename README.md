@@ -90,19 +90,26 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_web_key | 是 | 无 | str 或 list | Steam Api Key |
 | steam_command_priority | 否 | 5 | int | 事件处理函数优先级 |
 | steam_interval | 否 | 1 | int | steam查询间隔，单位分钟 |
+| steam_tail_tone | 否 | "" | str | bot尾音口癖 |
 | steam_proxy | 否 | None | str | 代理 |
 | steam_link_enabled | 否 | true | bool | 链接识别全局开关 |
 | steam_area_game | 否 | false | bool/list | 识别其它区游戏 |
 | steam_link_r18_game | 否 | false | bool/list | 识别r18游戏 |
 
+steam_tail_tone 示例
+```.env
+# .env.xxx
+steam_tail_tone=" 喵"
+```
+
 steam_proxy 示例
-```bash
+```.env
 # .env.xxx
 steam_proxy="http://ip:port"
 ```
 
 单个 steam key 配置示例
-```bash
+```.env
 # .env.xxx
 steam_web_key=123456789QWERTYUII123456789
 
@@ -113,7 +120,7 @@ steam_web_key="123456789QWERTYUII123456789"
 ```
 
 多个 steam key 配置示例
-```bash
+```.env
 # .env.xxx
 # 注意最后一行key后面不能有逗号
 steam_web_key='[
@@ -128,7 +135,7 @@ steam_web_key=["123456789QWERTYUII123456789","123456789","987654321"]
 ```
 
 steam_area_game 识别其它区游戏
-```bash
+```.env
 # .env.xxx
 # 使用布尔值开启或关闭
 steam_area_game=false
@@ -146,7 +153,7 @@ steam_area_game='
 
 
 steam_link_r18_game 识别r18游戏
-```bash
+```.env
 # .env.xxx
 # 使用布尔值开启或关闭
 steam_link_r18_game=false
@@ -208,10 +215,17 @@ pip install nonebot[httpx]
 2. 不支持播报 Steam 隐身状态下进行的游戏
 3. 在屏蔽游戏间切换的非屏蔽游戏也不会播报
 4. 屏蔽游戏列表以群区分管理
+5. 0.2版本已知问题：多个同适配器bot（如多个OneBot）目前还存在选择错误而推送群消息失败的问题，后续修复
 
 
 
 ## 更新记录
+2025.09.04 0.2.1
+1. 修复部分预发布游戏没有标签导致识别失败
+2. 修复跨平台多适配器下消息推送失败
+3. 0.2版本已知问题：多个同适配器bot（如多个OneBot）目前还存在选择错误而推送群消息失败的问题，后续修复
+
+
 2025.08.21 0.2.0
 1. 改用alconna插件实现，支持跨平台适配器
 2. 为链接识别增加白名单配置
