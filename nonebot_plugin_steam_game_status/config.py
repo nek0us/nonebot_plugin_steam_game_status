@@ -19,6 +19,7 @@ class Config(BaseModel):
     steam_link_enabled: bool = True
     steam_area_game: Union[bool, List[str]]= False
     steam_link_r18_game: Union[bool, List[str]] = False
+    steam_tail_tone: str = ""
     
     @field_validator("steam_web_key")
     @classmethod
@@ -100,6 +101,15 @@ class Config(BaseModel):
         else:
             logger.error("steam_link_r18_game 识别 配置错误")
             raise ValueError("steam_link_r18_game 识别 配置错误")
+        
+    @field_validator("steam_tail_tone")
+    @classmethod
+    def check_tail_tone(cls,v: str) -> str:
+        if v:
+            logger.success("steam_tail_tone 读取成功")
+        else:
+            logger.success("steam_tail_tone未配置")
+        return v
 
 config_steam = get_plugin_config(Config)
 bot_name = list(get_driver().config.nickname)
