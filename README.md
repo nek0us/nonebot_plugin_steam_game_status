@@ -12,7 +12,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 
 
 <a href="./LICENSE">
-    <img src="https://img.shields.io/github/license/nek0us/nonebot-plugin-gpt.svg" alt="license">
+    <img src="https://img.shields.io/github/license/nek0us/nonebot_plugin_steam_game_status.svg" alt="license">
 </a>
 <a href="https://pypi.python.org/pypi/nonebot_plugin_steam_game_status">
     <img src="https://img.shields.io/pypi/v/nonebot_plugin_steam_game_status.svg" alt="pypi">
