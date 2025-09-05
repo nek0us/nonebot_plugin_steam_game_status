@@ -13,7 +13,7 @@ from nonebot.internal.driver import Request
 from nonebot.exception import MatcherException
 from nonebot.plugin import inherit_supported_adapters
 
-from arclet.alconna import Alconna, Option, Args, CommandMeta
+from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
 from .utils import http_client, get_target, driver, HTTPClientSession, to_enum
 from .model import UserData, GroupData2, SafeResponse
@@ -368,8 +368,8 @@ steam_command_alc = Alconna(
     # Subcommand("add", Args["steam_id", str], alias=["绑定", "添加", ".add"],separators=""),
     Option("add", Args["id", str], alias=["绑定", "添加", ".add"],separators="",compact=True),
     Option("del", Args["id", str], alias=["解绑", "删除", ".del"],separators="",compact=True),
-    Option("屏蔽", Args["game", str],separators="",compact=True),
-    Option("恢复", Args["game", str],separators="",compact=True),
+    Option("屏蔽", Args["game", AllParam(str)],separators="",compact=True),
+    Option("恢复", Args["game", AllParam(str)],separators="",compact=True),
     Option("排除列表",separators="",compact=True),
     Option("list", alias=["列表", "绑定列表", "播报列表"],separators="",compact=True),
     Option("播报", Args["status", str],separators="",compact=True),
