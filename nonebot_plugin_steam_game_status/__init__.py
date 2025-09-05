@@ -25,7 +25,8 @@ from .api import (
     generate_image,
     get_steam_key,
     save_data,
-    no_private_rule
+    no_private_rule,
+    gameid_to_price
     )
 from .source import (
     new_file_group,
@@ -158,10 +159,20 @@ async def steam_link_handle(target: MsgTarget,matcher: Matcher, appid: Match[str
                         res = await client.request(Request("GET", dlc_res_json["data"]["header_image"]))
                         dlc_img.append(res.content  + random_int.encode() if isinstance(res.content, bytes) else None)
     Image()
+    price = await gameid_to_price(app_id, game_data, res_json["from"])
+    if price["status"]:
+        # 暂未推出 或 免费
+        price_text = price["status"]
+    else:
+        price_text = f"现价：{price['now']} {price['currency']}"
+        if price["history"]:
+            price_text = f"史低：{price['history']} {price['currency']}\n" + price_text
+        if price["original"]:
+            price_text = f"原价：{price['original']} {price['currency']}\n折扣：{price['percent']}\n" + price_text
     msgs = [
         UniMessage.image(raw = header_image if header_image else b""),
         UniMessage.text(game_data['name']),
-        UniMessage.text('免费' if game_data['is_free'] else (f"现价：{game_data['price_overview']['final_formatted']}\n原价：{game_data['price_overview']['initial_formatted']}\n折扣：{game_data['package_groups'][0]['subs'][0]['percent_savings_text']}" if 'initial_formatted' in game_data['price_overview'] else game_data['price_overview']['final_formatted']) if 'price_overview' in game_data else random.choice(['即将推出','还没推出','还没发售'])),
+        UniMessage.text(price_text),
         UniMessage.text(f"分级：{game_data['ratings']['dejus']['rating']}" if "ratings" in game_data and "dejus" in game_data["ratings"] and "rating" in game_data["ratings"]["dejus"] else "暂无分级"),
         UniMessage.image(raw = png),
         UniMessage.text(game_data["supported_languages"].replace("<strong>","").replace("</strong>","").replace("<br>","") if "supported_languages" in game_data else "支持语言：未知"),

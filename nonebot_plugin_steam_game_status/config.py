@@ -12,6 +12,7 @@ except Exception:
 
 class Config(BaseModel):
     steam_web_key: Union[str, List[str]] = []
+    steam_isthereanydeal_key: Union[str, List[str]] = []
     steam_command_priority: int = 5
     steam_interval: int = 1
     steam_proxy: Optional[str] = None
@@ -21,19 +22,30 @@ class Config(BaseModel):
     steam_link_r18_game: Union[bool, List[str]] = False
     steam_tail_tone: str = ""
     
+    @field_validator("steam_isthereanydeal_key")
+    @classmethod
+    def check_isthereanydeal_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
+        if isinstance(v,str):
+            logger.success("steam_isthereanydeal_key 读取成功")
+        elif isinstance(v, list) and all(isinstance(item, str) for item in v):
+            logger.success("steam_isthereanydeal_key 列表读取成功")
+        else:
+            logger.error("steam_isthereanydeal_key 配置错误")
+            raise ValueError("steam_isthereanydeal_key 配置错误")
+        return v
+    
     @field_validator("steam_web_key")
     @classmethod
     def check_api_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
         if isinstance(v,str):
             logger.success("steam_web_key 读取成功")
-            return v
         elif isinstance(v, list) and all(isinstance(item, str) for item in v):
             logger.success("steam_web_key 列表读取成功")
-            return v
         else:
-            logger.error("steam_web_key 未配置")
-            raise ValueError("steam_web_key 未配置")
-    
+            logger.error("steam_web_key 配置错误")
+            raise ValueError("steam_web_key 配置错误")
+        return v
+            
     @field_validator("steam_command_priority")
     @classmethod
     def check_priority(cls,v: int) -> int:
