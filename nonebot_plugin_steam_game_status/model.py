@@ -6,10 +6,12 @@ class GroupData(TypedDict):
     status: bool
     user_list: List[str]
 
-class GroupData2(TypedDict):
-    status: bool
-    user_list: List[str]
+class GroupData2(GroupData):
     adapter: str
+    
+class GroupData3(GroupData2):
+    xijiayi: bool
+    
 
 class UserData(TypedDict):
     time: int

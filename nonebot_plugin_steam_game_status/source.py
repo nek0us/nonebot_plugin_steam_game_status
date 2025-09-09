@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, List
 from nonebot import require,logger
-from .model import GroupData, GroupData2, UserData
+from .model import GroupData, GroupData2, GroupData3, UserData
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as store
 
@@ -37,6 +37,7 @@ new_file_steam = data_dir / "steam_user_list.json"
 new_file_group = data_dir / "steam_group_list.json"
 game_cache_file = data_dir / "game_cache.json"
 exclude_game_file = data_dir / "exclude_game"
+game_free_cache_file = data_dir / "game_free_cache.json"
 
 exclude_game_default = ["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
 
@@ -50,6 +51,7 @@ if not old_dirpath.exists():
         new_file_group.write_text("{}")
         game_cache_file.write_text("{}")
         exclude_game_file.write_text("{}")
+        game_free_cache_file.write_text("{}")
     else:
         # 存在，准备好的新用户
         # 看看exclude在不在
@@ -69,6 +71,10 @@ if not old_dirpath.exists():
                 if group_id not in exclude_game_tmp:
                     exclude_game_tmp[group_id] = exclude_game_default
             exclude_game_file.write_text(json.dumps(exclude_game_tmp))
+        
+        # 0.2.2 25.09.08 版本喜加一适配
+        if not game_free_cache_file.exists():
+            game_free_cache_file.write_text("[]")
 else:
     # 存在旧文件，看看新的在不在
     if not new_file_steam.exists():
@@ -97,6 +103,7 @@ else:
             # 写入新文件
             new_file_steam.write_text(json.dumps(new_json_steam))
             new_file_group.write_text(json.dumps(new_json_group))
+            # 太久远版本没做迁移，懒得适配排除目录和喜加一目录了，直接删除重新旧数据比较快
             logger.success("steam 数据迁移完成")
 
 # 25.08.21 UserData迁移
@@ -128,12 +135,28 @@ if value_25_09_02:
         logger.success("steam 0.2.1 25.09.02 adapter更新数据成功")
 
 
+# 25.09.08 xijiayi更新
+steam_group_25_09_08: Dict[str, GroupData2] = json.loads(new_file_group.read_text("utf8")) 
+value_25_09_08 = next(iter(steam_group_25_09_08.values()), None)
+if value_25_09_08:
+    if "xijiayi" not in value_25_09_08:
+        steam_group_dict_25_09_08 = {}
+        for group_id in steam_group_25_09_08:
+            steam_group_dict_25_09_08[group_id] = GroupData3(
+                status=steam_group_25_09_08[group_id]["status"],
+                user_list=steam_group_25_09_08[group_id]["user_list"],
+                adapter=steam_group_25_09_08[group_id]["adapter"],
+                xijiayi=False
+            )
+        new_file_group.write_text(json.dumps(steam_group_dict_25_09_08))
+        logger.success("steam 0.2.2 25.09.08 xijiayi更新数据成功")
 
 
-group_list: Dict[str, GroupData2] = json.loads(new_file_group.read_text("utf8"))  
+group_list: Dict[str, GroupData3] = json.loads(new_file_group.read_text("utf8"))  
 steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8")) 
 gameid2name = json.loads(game_cache_file.read_text("utf8"))
 exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf8"))
+game_free_cache: List[str] = json.loads(game_free_cache_file.read_text("utf8"))
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
