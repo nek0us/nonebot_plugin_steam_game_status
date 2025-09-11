@@ -6,7 +6,7 @@ from typing import Dict, List
 from nonebot import require,logger
 from .model import GroupData, GroupData2, GroupData3, UserData
 require("nonebot_plugin_localstore")
-import nonebot_plugin_localstore as store
+import nonebot_plugin_localstore as store  # noqa: E402
 
 nb_project = os.path.basename(os.getcwd())
 

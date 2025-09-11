@@ -2,10 +2,11 @@ from nonebot import get_driver
 from typing import AsyncIterator
 from contextlib import asynccontextmanager
 from nonebot.internal.driver import HTTPClientMixin, HTTPClientSession
-from nonebot_plugin_alconna.uniseg import Target,SupportAdapter
+from nonebot_plugin_alconna.uniseg import SupportAdapter
 
 from .config import config_steam
 from .source import group_list
+from .model import ModTarget
 
 driver = get_driver()
 
@@ -39,9 +40,9 @@ def to_enum(s: str) -> SupportAdapter:
     except ValueError:
         return SupportAdapter.onebot11
 
-def get_target(group_id: str):
+def get_target(group_id: str) -> ModTarget:
     adapter_name = group_list[group_id]["adapter"]
-    target = Target(
+    target = ModTarget(
         id=group_id,
         adapter=to_enum(adapter_name)
         )

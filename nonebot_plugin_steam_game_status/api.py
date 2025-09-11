@@ -2,17 +2,18 @@
 import json
 import random
 
-from bs4 import BeautifulSoup, Tag
-from typing import Dict, List, Optional
 from nonebot import require
 from nonebot.log import logger
 from nonebot.adapters import Bot
 from nonebot.internal.driver import Request
-from nonebot_plugin_alconna.uniseg import UniMessage, CustomNode, Reference, MsgTarget, Target
 from nonebot_plugin_alconna import Image
+from nonebot_plugin_alconna.uniseg import UniMessage, CustomNode, Reference, MsgTarget, Target
+
+from bs4 import BeautifulSoup, Tag
+from typing import Dict, List, Optional
 
 from .config import bot_name
-from .model import SafeResponse
+from .model import SafeResponse, ModTarget
 from .utils import config_steam,http_client,get_target,HTTPClientSession
 from .source import (
     HTML_TEMPLATE,
@@ -28,7 +29,7 @@ from .source import (
     game_free_cache,
     )
 require("nonebot_plugin_htmlrender")
-from nonebot_plugin_htmlrender import html_to_pic
+from nonebot_plugin_htmlrender import html_to_pic  # noqa: E402
 
 async def steam_link_rule() -> bool:
     if config_steam.steam_plugin_enabled and config_steam.steam_link_enabled:
@@ -186,16 +187,6 @@ async def get_history_price(game_uuid: str, client: HTTPClientSession, location:
     else:
         raise ConnectionError(f"gameid_to_uuid 获取失败，game_uuid_id:{game_uuid}，res code:{res.status_code}，res text:{res.text}")
 
-from .utils import driver
-@driver.on_startup
-async def test():
-    a = config_steam
-    await get_free_games_list()
-    # async with http_client() as client:
-    #     uuid = await gameid_to_uuid("1174180",client)
-    #     c = await get_history_price(uuid,client)
-    # pass
-        
 def save_data():
     global steam_list,group_list,exclude_game
     new_file_group.write_text(json.dumps(group_list)) 
@@ -271,7 +262,7 @@ async def get_game_data_msg(res_json, xijiayi = False):
         UniMessage.text(want),
         
         [UniMessage.image(raw=img) for img in screenshots_img],
-        [UniMessage.image(raw=img) for img in dlc_img] if dlc_img else UniMessage.text("无DLC"),
+        [UniMessage.image(raw=img) for img in dlc_img] if dlc_img else [UniMessage.text("无DLC")],
         
     ]
     return forward_name, msgs
@@ -289,22 +280,22 @@ async def make_game_data_node_msg(target: Target|MsgTarget, forward_name: List[s
             messages.append(CustomNode(uid=str(target.self_id),name=name,content=msg))
     return messages
 
-async def send_node_msg(messages: List[CustomNode], app_id: str,bot: Optional[Bot] = None):
+async def send_node_msg(messages: List[CustomNode], app_id: str,target: Optional[ModTarget] = None,bot: Optional[Bot] = None):
     try:
-        await UniMessage(Reference(nodes=messages)).send(bot=bot)
+        await UniMessage(Reference(nodes=messages)).send(target=target, bot=bot)
     except Exception as e:
         logger.debug(f"steam app_id: {app_id} 消息发送异常 {e}，准备删除DLC后重试")
         try:
             new_msg = [x for x in messages if x.name != "DLC"]
-            await UniMessage(Reference(nodes=new_msg)).send(bot=bot)
+            await UniMessage(Reference(nodes=new_msg)).send(target=target, bot=bot)
         except Exception as e:
             logger.debug(f"steam app_id: {app_id} 消息再次发送异常 {e}，准备删除DLC和截图后重试")
             new_new_msg = [x for x in messages if x.name not in ("DLC", "截图")]
             try:
-                await UniMessage(Reference(nodes=new_new_msg)).send(bot=bot)
+                await UniMessage(Reference(nodes=new_new_msg)).send(target=target, bot=bot)
             except Exception as e:
                 logger.debug(f"steam app_id: {app_id} 消息再再次发送异常 {e}")
-                await UniMessage(f"steam app_id: {app_id} 似乎发不出去...").send(bot=bot, reply_to=True)
+                await UniMessage(f"steam app_id: {app_id} 似乎发不出去...").send(target=target, bot=bot, reply_to=True)
     
 async def get_free_games_list() -> List:
     game_appid_list = []
@@ -334,6 +325,7 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
                 res_json = await get_game_info(app_id)
                 forward_name, msgs = await get_game_data_msg(res_json, True)
                 if target:
+                    logger.debug(f"steam获取推送喜加一信息来源用户消息，app_id:{app_id} target:{target.id} {target.adapter}")
                     messages = await make_game_data_node_msg(target, forward_name, msgs)
                     await send_node_msg(messages, app_id)
                 else:
@@ -344,11 +336,28 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
 
                     for group_id in group_list:
                         if group_list[group_id]["xijiayi"]:
-                            target = get_target(group_id)
-                            bot = await target.select()
-                            target.self_id = bot.self_id
-                            messages = await make_game_data_node_msg(target, forward_name, msgs)
-                            await send_node_msg(messages, app_id, bot)
+                            send_target = await get_group_target_bot(group_id)
+                            if send_target:
+                                logger.debug(f"steam获取推送喜加一信息来源用户订阅，app_id:{app_id} target:{send_target.id} {send_target.adapter}")
+                                messages = await make_game_data_node_msg(send_target, forward_name, msgs)
+                                await send_node_msg(messages, app_id, send_target)
+                        else:
+                            # TODO: 收纳群号，统一情况群内数据
+                            pass
     else:
         logger.info("steam喜加一暂无结果")
         return "steam喜加一暂无结果"
+    
+async def get_group_target_bot(id: str) -> Optional[ModTarget]:
+    send_target = get_target(id)
+    bots = await send_target.mod_select()
+    if bots == []:
+        logger.warning(f"目标id：{id}，适配器：{send_target.adapter} 不在当前适配器bot的群列表中，为避免风控停止对id发送。")
+        return None
+    else:
+        if isinstance(bots, Bot):
+            bot = bots
+        else:
+            bot = random.choice(bots)
+        send_target.self_id = bot.self_id
+        return send_target

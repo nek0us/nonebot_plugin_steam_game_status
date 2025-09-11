@@ -4,7 +4,7 @@ import time
 import random
 import asyncio
 
-from typing import Dict, List
+from typing import Dict, List, Optional, Literal
 from nonebot import require
 from nonebot.log import logger
 from nonebot.matcher import Matcher
@@ -15,10 +15,17 @@ from nonebot.plugin import inherit_supported_adapters
 
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
-from .utils import http_client, get_target, driver, HTTPClientSession, to_enum
-from .model import UserData, GroupData3, SafeResponse
-from .config import Config,__version__, config_steam, bot_name
-from .api import (
+require("nonebot_plugin_alconna")
+from nonebot_plugin_alconna import Arparma, on_alconna, Match  # noqa: E402
+from nonebot_plugin_alconna.uniseg import UniMessage,CustomNode,Reference,MsgTarget  # noqa: E402
+
+require("nonebot_plugin_apscheduler")
+from nonebot_plugin_apscheduler import scheduler  # noqa: E402
+
+from .utils import http_client, driver, HTTPClientSession, to_enum  # noqa: E402
+from .model import UserData, GroupData3, SafeResponse  # noqa: E402
+from .config import Config,__version__, config_steam, bot_name  # noqa: E402
+from .api import (  # noqa: E402
     gameid_to_name, 
     steam_link_rule,
     get_game_info,
@@ -29,8 +36,9 @@ from .api import (
     make_game_data_node_msg,
     send_node_msg,
     get_free_games_info,
+    get_group_target_bot,
     )
-from .source import (
+from .source import (  # noqa: E402
     new_file_group,
     new_file_steam,
     exclude_game_file,
@@ -40,15 +48,6 @@ from .source import (
     exclude_game
     )
 
-
-
-
-require("nonebot_plugin_alconna")
-from nonebot_plugin_alconna import Arparma, on_alconna, Match
-from nonebot_plugin_alconna.uniseg import UniMessage,CustomNode,Reference,Target,MsgTarget
-
-require("nonebot_plugin_apscheduler")
-from nonebot_plugin_apscheduler import scheduler
 
 
 __plugin_meta__ = PluginMetadata(
@@ -124,7 +123,6 @@ async def steam_link_handle(target: MsgTarget,matcher: Matcher, appid: Match[str
             else:
                 if id not in config_steam.steam_area_game:
                     await matcher.finish("没有找到这个游戏",reply_message=True)
-
         game_data = res_json['data']
         if "ratings" in game_data:
             if "steam_germany" in game_data["ratings"]:
@@ -198,10 +196,12 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                     if game_name in exclude_game[str(group_id)]:
                         logger.trace(f"群 {group_id} 因游戏名单跳过发送 steam id {steam_id},name {res_info['personaname']} 正在玩的游戏 {game_name}")
                         continue
-                    target = get_target(group_id)
-                    bot = await target.select()
-                    logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 正在玩的游戏 {game_name}。使用适配器{bot}")
-                    await UniMessage(f"{res_info['personaname']} 开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target,bot=bot)
+                    target = await get_group_target_bot(group_id)
+                    if target:
+                        logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 正在玩的游戏 {game_name}。使用适配器 {target.adapter}，Bot id {target.self_id}")
+                        await UniMessage(f"{res_info['personaname']} 开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target)
+                    else:
+                        pass
 
             elif "gameextrainfo" in res_info and steam_list[steam_id]["time"]!= -1 and steam_list[steam_id]["game_name"] != "":
                 # 如果发现开始玩了而之前也在玩(bot一直在线)
@@ -217,10 +217,12 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                         if game_name in exclude_game[str(group_id)] or game_name_old in exclude_game[str(group_id)]:
                             logger.trace(f"群 {group_id} 因游戏名单跳过发送 steam id {steam_id},name {res_info['personaname']} 正在玩的新游戏 {game_name},旧游戏 {game_name_old}")
                             continue
-                        target = get_target(group_id)
-                        bot = await target.select()
-                        logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 正在玩的新游戏 {game_name}。使用适配器{bot}")
-                        await UniMessage(f"{res_info['personaname']} 又开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target,bot=bot)
+                        target = await get_group_target_bot(group_id)
+                        if target:
+                            logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 正在玩的新游戏 {game_name}。使用适配器{target.adapter}，Bot id {target.self_id}")
+                            await UniMessage(f"{res_info['personaname']} 又开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target)
+                        else:
+                            pass
 
             elif "gameextrainfo" not in res_info and steam_list[steam_id]["game_name"] != "":
                 # 之前有玩，现在没玩
@@ -234,14 +236,16 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                     if game_name_old in exclude_game[str(group_id)]:
                         logger.trace(f"群 {group_id} 因游戏名单跳过发送 steam id {steam_id},name {res_info['personaname']} 重启之前停止的游戏： {game_name_old}")
                         continue
-                    target = get_target(group_id)
-                    bot = await target.select()
-                    if game_time_old == -1:
-                        logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 重启之前停止的游戏： {game_name_old}。使用适配器{bot}")
-                        await UniMessage(f"{res_info['personaname']} 不再玩 {game_name_old} 。但{random.choice(bot_name)}忘了，不记得玩了多久了{config_steam.steam_tail_tone}。").send(target=target,bot=bot)
+                    target = await get_group_target_bot(group_id)
+                    if target:
+                        if game_time_old == -1:
+                            logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 重启之前停止的游戏： {game_name_old}。使用适配器{target.adapter}，Bot id {target.self_id}")
+                            await UniMessage(f"{res_info['personaname']} 不再玩 {game_name_old} 。但{random.choice(bot_name)}忘了，不记得玩了多久了{config_steam.steam_tail_tone}。").send(target=target)
+                        else:
+                            logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 停止的游戏： {game_name_old}。使用适配器{target.adapter}，Bot id {target.self_id}")
+                            await UniMessage(f"{res_info['personaname']} 玩了 {game_time} 分钟 {game_name_old} 后不玩了{config_steam.steam_tail_tone}。").send(target=target)
                     else:
-                        logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 停止的游戏： {game_name_old}。使用适配器{bot}")
-                        await UniMessage(f"{res_info['personaname']} 玩了 {game_time} 分钟 {game_name_old} 后不玩了{config_steam.steam_tail_tone}。").send(target=target,bot=bot)
+                        pass
                     
             elif  "gameextrainfo" in res_info and steam_list[steam_id]["time"]== -1 and steam_list[steam_id]["game_name"] != "":
                 # 之前有在玩 A，但bot重启了，现在在玩 B
@@ -258,10 +262,12 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                         if game_name in exclude_game[str(group_id)] or game_name_old in exclude_game[str(group_id)]:
                             logger.trace(f"群 {group_id} 因游戏名单跳过发送 steam id {steam_id},name {res_info['personaname']} 重启之后的游戏： {game_name},重启之前的游戏 {game_name_old}")
                             continue
-                        target = get_target(group_id)
-                        bot = await target.select()
-                        logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 重启之后的游戏： {game_name}。使用适配器{bot}")
-                        await UniMessage(f"{res_info['personaname']} 又开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target,bot=bot)
+                        target = await get_group_target_bot(group_id)
+                        if target:
+                            logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 重启之后的游戏： {game_name}。使用适配器{target.adapter}，Bot id {target.self_id}")
+                            await UniMessage(f"{res_info['personaname']} 又开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target)
+                        else:
+                            pass
                 else:
                     logger.trace(f"用户 {steam_id} 重启后还在玩 {game_name_old}，所以跳过播报")    
                     
@@ -317,7 +323,7 @@ steam_command_alc = Alconna(
     Option("排除列表",separators="",compact=True),
     Option("list", alias=["列表", "绑定列表", "播报列表"],separators="",compact=True),
     Option("播报", Args["status", str],separators="",compact=True),
-    Option("喜加一",separators="",compact=True),
+    Option("喜加一", Args["action", Optional[Literal["订阅", "退订"]]], separators="", compact=True),
     separators="",
     meta=CommandMeta(compact=True)
 )
@@ -504,7 +510,17 @@ async def steam_on_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"Steam 播报已{status.result}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 @steam_cmd.assign("喜加一")
-async def steam_free_handle(target: MsgTarget, matcher: Matcher):
+async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[str]):
+    if action.result:
+        group_list[target.id]["xijiayi"] = True if action.result == "订阅" else False
+        save_data()
+        await matcher.finish(f"steam 喜加一 已{action.result}{config_steam.steam_tail_tone}")
     res = await get_free_games_info(target)
     if res:
         await matcher.finish(res)
+        
+@scheduler.scheduled_job("cron", hour=config_steam.steam_subscribe_time[0], minute=config_steam.steam_subscribe_time[1])
+async def steam_subscribe():
+    logger.info("steam定时尝试获取推送喜加一")
+    await get_free_games_info()
+    logger.info("steam定时尝试获取推送喜加一结束")

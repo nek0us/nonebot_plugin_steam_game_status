@@ -21,6 +21,7 @@ class Config(BaseModel):
     steam_area_game: Union[bool, List[str]]= False
     steam_link_r18_game: Union[bool, List[str]] = False
     steam_tail_tone: str = ""
+    steam_subscribe_time: str = "08:00"
     
     @field_validator("steam_isthereanydeal_key")
     @classmethod
@@ -123,6 +124,19 @@ class Config(BaseModel):
         else:
             logger.success("steam_tail_tone未配置")
         return v
-
+        
+    @field_validator("steam_subscribe_time")
+    @classmethod
+    def check_subscribe_time(cls,v: str) -> str:
+        if v:
+            if ":" in v:
+                logger.success(f"steam_tail_tone 订阅时间 {v} 读取成功")
+            else:
+                logger.exception(f"steam_tail_tone 订阅时间 {v} 设置格式错误，将使用默认时间 08:00 ")
+                return "08:00"
+        else:
+            logger.info("steam_tail_tone未配置，将使用默认时间 08:00 ")
+        return v
+    
 config_steam = get_plugin_config(Config)
 bot_name = list(get_driver().config.nickname)
