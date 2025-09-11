@@ -130,9 +130,9 @@ class Config(BaseModel):
     def check_subscribe_time(cls,v: str) -> str:
         if v:
             if ":" in v:
-                logger.success(f"steam_tail_tone 订阅时间 {v} 读取成功")
+                logger.success(f"steam_subscribe_time 订阅时间 {v} 读取成功")
             else:
-                logger.exception(f"steam_tail_tone 订阅时间 {v} 设置格式错误，将使用默认时间 08:00 ")
+                logger.exception(f"steam_subscribe_time 订阅时间 {v} 设置格式错误，将使用默认时间 08:00 ")
                 return "08:00"
         else:
             logger.info("steam_tail_tone未配置，将使用默认时间 08:00 ")

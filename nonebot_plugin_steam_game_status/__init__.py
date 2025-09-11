@@ -15,17 +15,10 @@ from nonebot.plugin import inherit_supported_adapters
 
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
-require("nonebot_plugin_alconna")
-from nonebot_plugin_alconna import Arparma, on_alconna, Match  # noqa: E402
-from nonebot_plugin_alconna.uniseg import UniMessage,CustomNode,Reference,MsgTarget  # noqa: E402
-
-require("nonebot_plugin_apscheduler")
-from nonebot_plugin_apscheduler import scheduler  # noqa: E402
-
-from .utils import http_client, driver, HTTPClientSession, to_enum  # noqa: E402
-from .model import UserData, GroupData3, SafeResponse  # noqa: E402
-from .config import Config,__version__, config_steam, bot_name  # noqa: E402
-from .api import (  # noqa: E402
+from .utils import http_client, get_target, driver, HTTPClientSession, to_enum
+from .model import UserData, GroupData3, SafeResponse
+from .config import Config,__version__, config_steam, bot_name
+from .api import (
     gameid_to_name, 
     steam_link_rule,
     get_game_info,
@@ -38,7 +31,7 @@ from .api import (  # noqa: E402
     get_free_games_info,
     get_group_target_bot,
     )
-from .source import (  # noqa: E402
+from .source import (
     new_file_group,
     new_file_steam,
     exclude_game_file,
@@ -48,6 +41,15 @@ from .source import (  # noqa: E402
     exclude_game
     )
 
+
+
+
+require("nonebot_plugin_alconna")
+from nonebot_plugin_alconna import Arparma, on_alconna, Match
+from nonebot_plugin_alconna.uniseg import UniMessage,CustomNode,Reference,Target,MsgTarget
+
+require("nonebot_plugin_apscheduler")
+from nonebot_plugin_apscheduler import scheduler
 
 
 __plugin_meta__ = PluginMetadata(
@@ -519,7 +521,7 @@ async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[s
     if res:
         await matcher.finish(res)
         
-@scheduler.scheduled_job("cron", hour=config_steam.steam_subscribe_time[0], minute=config_steam.steam_subscribe_time[1])
+@scheduler.scheduled_job("cron", hour=config_steam.steam_subscribe_time.split(":")[0], minute=config_steam.steam_subscribe_time.split(":")[1])
 async def steam_subscribe():
     logger.info("steam定时尝试获取推送喜加一")
     await get_free_games_info()
