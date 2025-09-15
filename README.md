@@ -96,11 +96,19 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_link_enabled | 否 | true | bool | 链接识别全局开关 |
 | steam_area_game | 否 | false | bool/list | 识别其它区游戏 |
 | steam_link_r18_game | 否 | false | bool/list | 识别r18游戏 |
-
+| steam_tail_tone | 否 | "" | str | bot尾音 |
+| steam_subscribe_time | 否 | "08:00" | str | 喜加一订阅检索推送时间 |
+---
 steam_tail_tone 示例
 ```.env
 # .env.xxx
 steam_tail_tone=" 喵"
+```
+
+steam_subscribe_time 示例
+```.env
+# .env.xxx
+steam_subscribe_time="20:30"
 ```
 
 steam_proxy 示例
@@ -203,7 +211,10 @@ pip install nonebot[httpx]
 | steam恢复 | 否 | 群聊 | 群员 |       后加完整游戏名称         |    
 | steam排除列表 | 否 | 群聊 | 群员 |       展示屏蔽的游戏列表        |    
 | steam播报开启/steam播报打开 | 否 | 群聊 | 群员 |       开启本群播报        |    
-| steam播报关闭/steam播报停止 | 否 | 群聊 | 群员 |       关闭本群播报        |   
+| steam播报关闭/steam播报停止 | 否 | 群聊 | 群员 |       关闭本群播报        |  
+| steam喜加一 | 否 | 群聊 | 群员 |       主动获取喜加一资讯        |    
+| steam喜加一订阅 | 否 | 群聊 | 群员 |       开启本群喜加一推送        |    
+| steam喜加一退订 | 否 | 群聊 | 群员 |       关闭本群喜加一推送        |  
 | 任意steam商店链接 | 否 | 群聊/私聊 | 群员/好友 |       获取游戏信息        |  
 
 ### 默认屏蔽游戏/工具名
@@ -227,6 +238,13 @@ pip install nonebot[httpx]
 
 
 ## 更新记录
+2025.09.15 0.2.2
+1. 添加喜加一及其订阅功能
+2. 增加游戏史低显示
+3. 修复屏蔽游戏指令对带空格的游戏名不生效的问题
+4. 修复OneBot适配器推送不在群聊的消息问题（多bot问题）
+
+
 2025.09.04 0.2.1
 1. 修复部分预发布游戏没有标签导致识别失败
 2. 修复跨平台多适配器下消息推送失败
