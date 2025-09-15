@@ -206,7 +206,7 @@ async def get_game_data_msg(res_json, xijiayi = False):
     forward_name = []
     if xijiayi:
         forward_name = [f"{'DLC 'if dlc else ''}喜加一"]
-    forward_name += ["预览",f"{'DLC 'if dlc else ''}名称","价格","分级","介绍","语言","标签","发售时间","","截图","DLC"]
+    forward_name += ["预览",f"{'DLC 'if dlc else ''}名称","链接","价格","分级","介绍","语言","标签","发售时间","","截图","DLC"]
 
     png = await generate_image(game_data['detailed_description'], 400)
     screenshots_url = [screenshots["path_full"] for screenshots in game_data["screenshots"]]
@@ -253,6 +253,7 @@ async def get_game_data_msg(res_json, xijiayi = False):
     msgs += [
         UniMessage.image(raw = header_image if header_image else b""),
         UniMessage.text(game_data['name']),
+        UniMessage.text(f"https://store.steampowered.com/app/{app_id}"),
         UniMessage.text(price_text),
         UniMessage.text(rating),
         UniMessage.image(raw = png),
@@ -321,7 +322,7 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
     game_appid_list = await get_free_games_list()
     if game_appid_list:
         for app_id in game_appid_list:
-            if app_id not in game_free_cache:
+            if app_id not in game_free_cache or target:
                 res_json = await get_game_info(app_id)
                 forward_name, msgs = await get_game_data_msg(res_json, True)
                 if target:
