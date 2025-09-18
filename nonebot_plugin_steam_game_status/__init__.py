@@ -13,6 +13,14 @@ from nonebot.internal.driver import Request
 from nonebot.exception import MatcherException
 from nonebot.plugin import inherit_supported_adapters
 
+require("nonebot_plugin_alconna")
+from nonebot_plugin_alconna import Arparma, on_alconna, Match
+from nonebot_plugin_alconna.uniseg import UniMessage,CustomNode,Reference,Target,MsgTarget
+
+require("nonebot_plugin_apscheduler")
+from nonebot_plugin_apscheduler import scheduler
+
+
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
 from .utils import http_client, get_target, driver, HTTPClientSession, to_enum
@@ -44,12 +52,6 @@ from .source import (
 
 
 
-require("nonebot_plugin_alconna")
-from nonebot_plugin_alconna import Arparma, on_alconna, Match
-from nonebot_plugin_alconna.uniseg import UniMessage,CustomNode,Reference,Target,MsgTarget
-
-require("nonebot_plugin_apscheduler")
-from nonebot_plugin_apscheduler import scheduler
 
 
 __plugin_meta__ = PluginMetadata(
@@ -71,12 +73,17 @@ __plugin_meta__ = PluginMetadata(
         删除方法：
             steam解绑/steam删除/steam.del [个人ID数值] 
             
-        管理员命令：
-            steam列表/steam绑定列表 	    
+        命令：
+            steam列表/steam绑定列表 	   
+            steam屏蔽 [游戏名]
+            steam恢复 [游戏名]
+            steam排除列表
             steam播报开启/steam播报打开  
             steam播报关闭/steam播报停止 
-            steam屏蔽 xx/steam恢复 xx
-            steam排除列表	
+            steam喜加一
+            steam喜加一订阅
+            steam喜加一退订
+            
         链接识别：
             从商店复制链接
     """,

@@ -51,7 +51,7 @@ if not old_dirpath.exists():
         new_file_group.write_text("{}")
         game_cache_file.write_text("{}")
         exclude_game_file.write_text("{}")
-        game_free_cache_file.write_text("{}")
+        game_free_cache_file.write_text("[]")
     else:
         # 存在，准备好的新用户
         # 看看exclude在不在
@@ -108,7 +108,8 @@ else:
 
 # 25.08.21 UserData迁移
 steam_list_tmp = json.loads(new_file_steam.read_text("utf8")) 
-if isinstance(steam_list_tmp[next(iter(steam_list_tmp))],List):
+steam_list_tmp_first_val = next(iter(steam_list_tmp.values()), None)
+if steam_list_tmp_first_val is not None and isinstance(steam_list_tmp_first_val, list):
     steam_list_dict = {}
     for steam_id in steam_list_tmp:
         steam_list_dict[steam_id] = UserData(
