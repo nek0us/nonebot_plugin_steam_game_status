@@ -10,7 +10,8 @@ from nonebot_plugin_alconna import SupportAdapter
 from nonebot_plugin_alconna.uniseg import Target, SerializeFailed
 from nonebot_plugin_alconna.uniseg.constraint import lang, log
 from nonebot_plugin_alconna.uniseg.target import _cache_selector
-from nonebot_plugin_sendmsg_by_bots.tools import is_in_group
+
+from nonebot.adapters.onebot.v11 import Bot as OBv11_Bot
 
 class GroupData(TypedDict):
     status: bool
@@ -145,3 +146,10 @@ class ModTarget(Target):
         if self.selector:
             return await mod_get_bot(id=self.id, adapter=self.adapter, predicate=self.selector, rand=True)
         raise SerializeFailed(lang.require("nbp-uniseg", "bot_missing"))
+    
+
+async def is_in_group(bot: OBv11_Bot,group_id: int) -> bool:
+    group_list = await bot.get_group_list()
+    if group_id not in [group_num["group_id"] for group_num in group_list]:
+        return False
+    return True
