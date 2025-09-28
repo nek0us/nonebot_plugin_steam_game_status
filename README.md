@@ -182,9 +182,12 @@ steam_link_r18_game='
 ### 插件依赖于 客户端驱动器
 请确保安装了客户端驱动器,如
 ```bash
-pip install nonebot[aiohttp]
+# 使用官方命令
+nb driver install aiohttp
 # 或
-pip install nonebot[httpx]
+pip install nonebot2[aiohttp]
+# 或
+pip install nonebot2[httpx]
  ```
 并配置`DRIVER=~aiohttp`等
 
