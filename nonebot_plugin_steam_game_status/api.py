@@ -253,7 +253,7 @@ async def get_game_data_msg(res_json, xijiayi = False):
     msgs += [
         UniMessage.image(raw = header_image if header_image else b""),
         UniMessage.text(game_data['name']),
-        UniMessage.text(f"https://{get_steam_store_domain()}/app/{app_id}"),
+        UniMessage.text(f"https://store.steampowered.com/app/{app_id}"),
         UniMessage.text(price_text),
         UniMessage.text(rating),
         UniMessage.image(raw = png),
