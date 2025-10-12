@@ -25,7 +25,7 @@ from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
 from .utils import http_client, get_target, driver, HTTPClientSession, to_enum
 from .model import UserData, GroupData3, SafeResponse
-from .config import Config,__version__, config_steam, bot_name
+from .config import Config,__version__, config_steam, bot_name, get_steam_api_domain
 from .api import (
     gameid_to_name, 
     steam_link_rule,
@@ -165,7 +165,7 @@ async def _():
             steam_name: str = ""
             try:
                 async with http_client() as client:
-                    url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
+                    url = f"https://{get_steam_api_domain()}/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
                     res = SafeResponse(await client.request(Request("GET", url, timeout=30)))
                     if res.status_code != 200:
                         logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 http状态码不为200: {res.status_code}")
@@ -186,7 +186,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
     res = None
     try:
         # async with http_client() as client:
-        url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
+        url = f"https://{get_steam_api_domain()}/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
         
         res = SafeResponse(await client.request(Request("GET", url, timeout=30)))
         if res.status_code == 200:
@@ -368,7 +368,7 @@ async def steam_bind_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
     else:
         try:
             async with http_client() as client:
-                url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
+                url = f"https://{get_steam_api_domain()}/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
                 res = SafeResponse(await client.request(Request("GET", url, timeout=30)))
             if res.status_code != 200:
                 logger.debug(f"{steam_id} 绑定失败，{res.status_code} {res.text}")

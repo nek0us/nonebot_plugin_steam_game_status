@@ -93,6 +93,8 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_interval | 否 | 1 | int | steam查询间隔，单位分钟 |
 | steam_tail_tone | 否 | "" | str | bot尾音口癖 |
 | steam_proxy | 否 | None | str | 代理 |
+| steam_api_proxy | 否 | None | str | Steam API 反代域名 |
+| steam_store_proxy | 否 | None | str | Steam Store 反代域名 |
 | steam_link_enabled | 否 | true | bool | 链接识别全局开关 |
 | steam_area_game | 否 | false | bool/list | 识别其它区游戏 |
 | steam_link_r18_game | 否 | false | bool/list | 识别r18游戏 |
@@ -115,6 +117,16 @@ steam_proxy 示例
 ```.env
 # .env.xxx
 steam_proxy="http://ip:port"
+```
+
+steam_api_proxy 和 steam_store_proxy 反代域名配置示例
+```.env
+# .env.xxx
+# 用于替代 api.steampowered.com
+steam_api_proxy="api.proxy.example.com"
+
+# 用于替代 store.steampowered.com
+steam_store_proxy="store.proxy.example.com"
 ```
 
 单个 steam key 配置示例 (`steam_isthereanydeal_key` 同理)
