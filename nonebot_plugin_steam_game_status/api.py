@@ -12,7 +12,7 @@ from nonebot_plugin_alconna.uniseg import UniMessage, CustomNode, Reference, Msg
 from bs4 import BeautifulSoup, Tag
 from typing import Dict, List, Optional
 
-from .config import bot_name
+from .config import bot_name, get_steam_store_domain
 from .model import SafeResponse, ModTarget
 from .utils import config_steam,http_client,get_target,HTTPClientSession
 from .source import (
@@ -41,7 +41,7 @@ async def get_game_info(app_id: str) -> dict:
     error = {'success': False}
     async with http_client() as client:
         for location in ["cn", "hk", "tw", "jp", "us"] if config_steam.steam_area_game else ["cn"]:
-            url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc={location}"
+            url = f"https://{get_steam_store_domain()}/api/appdetails?appids={app_id}&cc={location}"
             try:
                 res = SafeResponse(await client.request(Request("GET", url)))
                 if res.status_code == 200 and isinstance(res.content, bytes):
@@ -302,7 +302,7 @@ async def get_free_games_list() -> List:
     game_appid_list = []
     steam_page_request = Request(
         "GET",
-        "https://store.steampowered.com/search/?maxprice=free&specials=1&ndl=1&cc=cn"
+        f"https://{get_steam_store_domain()}/search/?maxprice=free&specials=1&ndl=1&cc=cn"
     )
     async with http_client() as client:
         res = SafeResponse(await client.request(steam_page_request))
