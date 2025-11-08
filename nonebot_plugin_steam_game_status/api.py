@@ -10,7 +10,7 @@ from nonebot_plugin_alconna import Image
 from nonebot_plugin_alconna.uniseg import UniMessage, CustomNode, Reference, MsgTarget, Target
 
 from bs4 import BeautifulSoup, Tag
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from .config import bot_name, get_steam_store_domain
 from .model import SafeResponse, ModTarget
@@ -337,11 +337,11 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
 
                     for group_id in group_list:
                         if group_list[group_id]["xijiayi"]:
-                            send_target = await get_group_target_bot(group_id)
+                            send_target, bot = await get_group_target_bot(group_id)
                             if send_target:
                                 logger.debug(f"steam获取推送喜加一信息来源用户订阅，app_id:{app_id} target:{send_target.id} {send_target.adapter}")
                                 messages = await make_game_data_node_msg(send_target, forward_name, msgs)
-                                await send_node_msg(messages, app_id, send_target)
+                                await send_node_msg(messages, app_id, send_target, bot)
                         else:
                             # TODO: 收纳群号，统一情况群内数据
                             pass
@@ -349,16 +349,18 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
         logger.info("steam喜加一暂无结果")
         return "steam喜加一暂无结果"
     
-async def get_group_target_bot(id: str) -> Optional[ModTarget]:
+async def get_group_target_bot(id: str) -> Tuple[Optional[ModTarget], Optional[Bot]]:
     send_target = get_target(id)
     bots = await send_target.mod_select()
     if bots == []:
         logger.warning(f"目标id：{id}，适配器：{send_target.adapter} 不在当前适配器bot的群列表中，为避免风控停止对id发送。")
-        return None
+        return None, None
     else:
         if isinstance(bots, Bot):
+            logger.trace(f"目标id：{id}，适配器：{send_target.adapter} 仅有一个bot，bot：{bots}")
             bot = bots
         else:
             bot = random.choice(bots)
         send_target.self_id = bot.self_id
-        return send_target
+        logger.trace(f"目标id：{id}，send_target: {send_target}，bot：{bot}")
+        return send_target, bot
