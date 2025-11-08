@@ -182,8 +182,9 @@ async def get_history_price(game_uuid: str, client: HTTPClientSession, location:
     if res.status_code == 200:
         data = res.json()
         if data:
-            history_price = data[0]["historyLow"]["all"]["amount"]
-            return history_price
+            if data[0] and data[0]["historyLow"] and data[0]["historyLow"]["all"] and data[0]["historyLow"]["all"]["amount"]:
+                history_price = data[0]["historyLow"]["all"]["amount"]
+                return history_price
     else:
         raise ConnectionError(f"gameid_to_uuid 获取失败，game_uuid_id:{game_uuid}，res code:{res.status_code}，res text:{res.text}")
 
