@@ -1,10 +1,9 @@
 from collections.abc import Awaitable
 import json
 import random
-import itertools
 from typing import Any, Callable, List, Optional, TypedDict, Union
-from nonebot import get_bots,get_adapter
-from nonebot import get_bot as _get_bot, get_adapters
+from nonebot import get_bots
+from nonebot import get_bot as _get_bot
 from nonebot.adapters import Adapter, Bot
 from nonebot.internal.driver import Response, HeaderTypes, ContentTypes
 from nonebot_plugin_alconna import SupportAdapter
@@ -78,20 +77,6 @@ class SafeResponse:
             return json.loads(self.text)
         except json.JSONDecodeError:
             raise ValueError(f"Response is not valid JSON: {self.text[:100]}...")
-
-def get_really_bots():
-    bots_drivers = list(get_bots().values())
-    log("TRACE", f"drivers all bots: {bots_drivers}")
-    adapters = get_adapters()
-    bots_adapters = list(itertools.chain.from_iterable(get_adapter(adapter_name).bots.values() for adapter_name in adapters))
-    log("TRACE", f"adapters all bots: {bots_adapters}")
-    if len(bots_drivers) > len(bots_adapters):
-        bots = bots_drivers
-        log("DEBUG", f"使用从驱动器获取bots: {bots}")
-    else:
-        bots = bots_adapters
-        log("DEBUG", f"使用从适配器获取bots: {bots}")
-    return bots
     
 async def mod_get_bot(
     *,
@@ -102,15 +87,14 @@ async def mod_get_bot(
     rand: bool = False,
     predicate: Union[Callable[[Bot], Awaitable[bool]], None] = None,
 ) -> Union[list[Bot], Bot]:
-    really_bots = get_really_bots()
     if not predicate and not adapter:
         if rand:
-            return random.choice(really_bots)
+            return random.choice(list(get_bots().values()))
         if index is not None:
-            return really_bots[index]
+            return list(get_bots().values())[index]
         return _get_bot(bot_id)
     bots = []
-    for bot in really_bots:
+    for bot in get_bots().values():
         if not predicate:
 
             async def _check_adapter(bot: Bot):
@@ -123,14 +107,11 @@ async def mod_get_bot(
         if await predicate(bot):
             bots.append(bot)
     log("TRACE", f"get bots: {bots}")
-    
     if not bot_id:
         if adapter == "OneBot V11" and id:
             for bot in bots:
                 if await is_in_group(bot=bot, group_id=(int(id))):
-                    log("DEBUG",f"检测到群对应bot，群:{id}，bot:{bot}")
                     return bot
-            log("DEBUG",f"检测群对应bot失败，群:{id}，bots：{bots}")
             return []
         if rand:
             return random.choice(bots)

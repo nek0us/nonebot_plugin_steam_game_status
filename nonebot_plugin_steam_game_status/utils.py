@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from nonebot.internal.driver import HTTPClientMixin, HTTPClientSession
 from nonebot_plugin_alconna.uniseg import SupportAdapter
 
-from .config import config_steam, get_steam_api_domain
+from .config import config_steam
 from .source import group_list
 from .model import ModTarget
 
@@ -18,7 +18,7 @@ async def http_client(**kwargs) -> AsyncIterator[HTTPClientSession]:
         "Accept-Language":"zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2",
         "Accept-Encoding":"gzip, deflate, br",
         "Connection":"keep-alive",
-        "Referer":f"https://{get_steam_api_domain()}/ISteamUser/GetPlayerSummaries/v0002/",
+        "Referer":"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/",
         "TE":"trailers"
     }
     if isinstance(driver, HTTPClientMixin):

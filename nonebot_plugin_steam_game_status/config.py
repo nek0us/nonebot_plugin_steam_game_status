@@ -16,8 +16,6 @@ class Config(BaseModel):
     steam_command_priority: int = 5
     steam_interval: int = 1
     steam_proxy: Optional[str] = None
-    steam_api_proxy: Optional[str] = None
-    steam_store_proxy: Optional[str] = None
     steam_plugin_enabled: bool = True
     steam_link_enabled: bool = True
     steam_area_game: Union[bool, List[str]]= False
@@ -130,11 +128,3 @@ class Config(BaseModel):
     
 config_steam = get_plugin_config(Config)
 bot_name = list(get_driver().config.nickname)
-
-def get_steam_api_domain() -> str:
-    """获取Steam API域名，如果配置了代理则使用代理域名"""
-    return config_steam.steam_api_proxy if config_steam.steam_api_proxy else "api.steampowered.com"
-
-def get_steam_store_domain() -> str:
-    """获取Steam Store域名，如果配置了代理则使用代理域名"""
-    return config_steam.steam_store_proxy if config_steam.steam_store_proxy else "store.steampowered.com"
