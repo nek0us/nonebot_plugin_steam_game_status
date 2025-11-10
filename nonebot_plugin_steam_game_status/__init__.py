@@ -48,6 +48,7 @@ from .source import (
     steam_list,
     group_list,
     exclude_game,
+    inactive_groups,
     inactive_groups_file
     )
 
