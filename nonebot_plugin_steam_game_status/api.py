@@ -10,9 +10,9 @@ from nonebot_plugin_alconna import Image
 from nonebot_plugin_alconna.uniseg import UniMessage, CustomNode, Reference, MsgTarget, Target
 
 from bs4 import BeautifulSoup, Tag
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from .config import bot_name
+from .config import bot_name, get_steam_store_domain
 from .model import SafeResponse, ModTarget
 from .utils import config_steam,http_client,get_target,HTTPClientSession
 from .source import (
@@ -43,7 +43,7 @@ async def get_game_info(app_id: str) -> dict:
     error = {'success': False}
     async with http_client() as client:
         for location in ["cn", "hk", "tw", "jp", "us"] if config_steam.steam_area_game else ["cn"]:
-            url = f"https://store.steampowered.com/api/appdetails?appids={app_id}&cc={location}"
+            url = f"https://{get_steam_store_domain()}/api/appdetails?appids={app_id}&cc={location}"
             try:
                 res = SafeResponse(await client.request(Request("GET", url)))
                 if res.status_code == 200 and isinstance(res.content, bytes):
@@ -184,8 +184,9 @@ async def get_history_price(game_uuid: str, client: HTTPClientSession, location:
     if res.status_code == 200:
         data = res.json()
         if data:
-            history_price = data[0]["historyLow"]["all"]["amount"]
-            return history_price
+            if data[0] and data[0]["historyLow"] and data[0]["historyLow"]["all"] and data[0]["historyLow"]["all"]["amount"]:
+                history_price = data[0]["historyLow"]["all"]["amount"]
+                return history_price
     else:
         raise ConnectionError(f"gameid_to_uuid 获取失败，game_uuid_id:{game_uuid}，res code:{res.status_code}，res text:{res.text}")
 
@@ -305,7 +306,7 @@ async def get_free_games_list() -> List:
     game_appid_list = []
     steam_page_request = Request(
         "GET",
-        "https://store.steampowered.com/search/?maxprice=free&specials=1&ndl=1&cc=cn"
+        f"https://{get_steam_store_domain()}/search/?maxprice=free&specials=1&ndl=1&cc=cn"
     )
     async with http_client() as client:
         res = SafeResponse(await client.request(steam_page_request))
@@ -340,11 +341,11 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
 
                     for group_id in group_list:
                         if group_list[group_id]["xijiayi"]:
-                            send_target = await get_group_target_bot(group_id)
+                            send_target, bot = await get_group_target_bot(group_id)
                             if send_target:
                                 logger.debug(f"steam获取推送喜加一信息来源用户订阅，app_id:{app_id} target:{send_target.id} {send_target.adapter}")
                                 messages = await make_game_data_node_msg(send_target, forward_name, msgs)
-                                await send_node_msg(messages, app_id, send_target)
+                                await send_node_msg(messages, app_id, send_target, bot)
                         else:
                                 # 收集 bot 不在群内的群号
                             if group_id not in inactive_groups:
@@ -362,16 +363,18 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
         logger.info("steam喜加一暂无结果")
         return "steam喜加一暂无结果"
     
-async def get_group_target_bot(id: str) -> Optional[ModTarget]:
+async def get_group_target_bot(id: str) -> Tuple[Optional[ModTarget], Optional[Bot]]:
     send_target = get_target(id)
     bots = await send_target.mod_select()
     if bots == []:
         logger.warning(f"目标id：{id}，适配器：{send_target.adapter} 不在当前适配器bot的群列表中，为避免风控停止对id发送。")
-        return None
+        return None, None
     else:
         if isinstance(bots, Bot):
+            logger.trace(f"目标id：{id}，适配器：{send_target.adapter} 仅有一个bot，bot：{bots}")
             bot = bots
         else:
             bot = random.choice(bots)
         send_target.self_id = bot.self_id
-        return send_target
+        logger.trace(f"目标id：{id}，send_target: {send_target}，bot：{bot}")
+        return send_target, bot
