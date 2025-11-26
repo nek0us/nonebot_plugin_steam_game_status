@@ -6,6 +6,7 @@ import asyncio
 
 from typing import Dict, List, Optional, Literal
 from nonebot import require
+from nonebot.permission import SUPERUSER
 from nonebot.log import logger
 from nonebot.matcher import Matcher
 from nonebot.plugin import PluginMetadata
@@ -46,7 +47,9 @@ from .source import (
     exclude_game_default,
     steam_list,
     group_list,
-    exclude_game
+    exclude_game,
+    inactive_groups,
+    inactive_groups_file
     )
 
 
@@ -210,7 +213,11 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                         logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 正在玩的游戏 {game_name}。使用适配器 {target.adapter}，Bot {bot}")
                         await UniMessage(f"{res_info['personaname']} 开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target, bot=bot)
                     else:
-                        pass
+                        # bot 不在群内，记录无效群
+                        if group_id not in inactive_groups:
+                            logger.info(f"Group {group_id} added to inactive_groups (no bot available) for steam_id {steam_id}, game {game_name}")
+                            inactive_groups.append(group_id)
+                            inactive_groups_file.write_text(json.dumps(inactive_groups))
 
             elif "gameextrainfo" in res_info and steam_list[steam_id]["time"]!= -1 and steam_list[steam_id]["game_name"] != "":
                 # 如果发现开始玩了而之前也在玩(bot一直在线)
@@ -231,7 +238,10 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                             logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 正在玩的新游戏 {game_name}。使用适配器{target.adapter}，Bot {bot}")
                             await UniMessage(f"{res_info['personaname']} 又开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target, bot=bot)
                         else:
-                            pass
+                            if group_id not in inactive_groups:
+                                logger.info(f"Group {group_id} added to inactive_groups (no bot available) for steam_id {steam_id}, game {game_name}")
+                                inactive_groups.append(group_id)
+                                inactive_groups_file.write_text(json.dumps(inactive_groups))
 
             elif "gameextrainfo" not in res_info and steam_list[steam_id]["game_name"] != "":
                 # 之前有玩，现在没玩
@@ -254,7 +264,10 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                             logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 停止的游戏： {game_name_old}。使用适配器{target.adapter}，Bot {bot}")
                             await UniMessage(f"{res_info['personaname']} 玩了 {game_time} 分钟 {game_name_old} 后不玩了{config_steam.steam_tail_tone}。").send(target=target, bot=bot)
                     else:
-                        pass
+                        if group_id not in inactive_groups:
+                            logger.info(f"Group {group_id} added to inactive_groups (no bot available) for steam_id {steam_id}, game {game_name}")
+                            inactive_groups.append(group_id)
+                            inactive_groups_file.write_text(json.dumps(inactive_groups))
                     
             elif  "gameextrainfo" in res_info and steam_list[steam_id]["time"]== -1 and steam_list[steam_id]["game_name"] != "":
                 # 之前有在玩 A，但bot重启了，现在在玩 B
@@ -276,7 +289,11 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                             logger.trace(f"群 {group_id} 准备发送 steam id {steam_id},name {res_info['personaname']} 重启之后的游戏： {game_name}。使用适配器{target.adapter}，Bot {bot}")
                             await UniMessage(f"{res_info['personaname']} 又开始玩 {game_name}{config_steam.steam_tail_tone} 。").send(target=target, bot=bot)
                         else:
-                            pass
+                            # bot 不在群内，记录无效群
+                            if group_id not in inactive_groups:
+                                logger.info(f"Group {group_id} added to inactive_groups (no bot available) for steam_id {steam_id}, game {game_name}")
+                                inactive_groups.append(group_id)
+                                inactive_groups_file.write_text(json.dumps(inactive_groups))
                 else:
                     logger.trace(f"用户 {steam_id} 重启后还在玩 {game_name_old}，所以跳过播报")    
                     
@@ -332,6 +349,7 @@ steam_command_alc = Alconna(
     Option("排除列表",separators="",compact=True),
     Option("list", alias=["列表", "绑定列表", "播报列表"],separators="",compact=True),
     Option("播报", Args["status", str],separators="",compact=True),
+    Option("steam墙", separators="",compact=True),
     Option("喜加一", Args["action", Optional[Literal["订阅", "退订"]]], separators="", compact=True),
     separators="",
     meta=CommandMeta(compact=True)
@@ -527,7 +545,122 @@ async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[s
     res = await get_free_games_info(target)
     if res:
         await matcher.finish(res)
-        
+
+@steam_cmd.assign("steam墙")
+async def steam_wall(matcher: Matcher, user: Match[str]):
+    arg = user.result.strip()
+    url = f"https://playtime-panorama.superserio.us/{arg}"
+
+    async def capture():
+        from playwright.async_api import async_playwright
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.set_viewport_size({"width": 2560, "height": 1600})
+        await page.goto(url, wait_until="networkidle", timeout=60000)
+
+        # 等加载完成或出错
+        await page.wait_for_function("""
+            () => {
+                if (document.querySelector('.error')) return true;
+                const imgs = document.querySelectorAll('img');
+                return Array.from(imgs).every(img => img.complete && img.naturalWidth > 0);
+            }
+        """, timeout=120000)
+
+        # 如果有错误提示，直接返回文字
+        if await page.query_selector('.error'):
+            error_text = await page.inner_text('.error')
+            raise Exception(f"页面错误：{error_text}")
+
+        screenshot = await page.screenshot(full_page=True, type="png")
+        await browser.close()
+        return screenshot
+
+    await matcher.send("正在渲染蒸汽墙，大概需要15~40秒，请耐心等待……")
+    try:
+        img_bytes = await asyncio.wait_for(capture(), timeout=180)
+        await matcher.finish(UniMessage.image(img_bytes))
+    except asyncio.TimeoutError:
+        await matcher.finish(f"渲染超时了（>180s），游戏可能非常多或网络卡顿\n直接打开网页版吧：{url}")
+    except Exception as e:
+        if "error" in str(e).lower() or "not found" in str(e).lower():
+            await matcher.finish("这个Steam账号不存在、未公开游戏记录或自定义URL错误哦~")
+        else:
+            await matcher.finish(f"渲染失败：{e}\n可以直接打开：{url}")
+
+
+
+# 新的超管指令 Alconna
+steam_admin_alc = Alconna(
+    "steam_admin",
+    Option("无效群列表", alias=["list_inactive"], separators="", compact=True),
+    Option("清理无效群", alias=["clear_inactive"], separators="", compact=True),
+    separators="",
+    meta=CommandMeta(compact=True, description="Steam 超管指令，仅限超管使用")
+)
+
+# 新的超管指令响应器
+steam_admin_cmd = on_alconna(
+    steam_admin_alc,
+    priority=config_steam.steam_command_priority + 1,  # 优先级略高于普通命令
+    permission=SUPERUSER  # 仅限超管
+)
+
+@steam_admin_cmd.assign("无效群列表")
+async def steam_inactive_groups_handle(target: MsgTarget):
+    global inactive_groups
+    if not inactive_groups:
+        await UniMessage(f"当前没有无效群（无 bot 的群）{config_steam.steam_tail_tone}").send()
+    else:
+        nodes = [
+            CustomNode(
+                uid=str(target.self_id),
+                name=str(index + 1),
+                content=UniMessage.text(f"群号: {group_id}")
+            )
+            for index, group_id in enumerate(inactive_groups)
+        ]
+        await UniMessage(Reference(nodes=nodes)).send()
+        logger.info(f"Superuser requested inactive groups list: {inactive_groups}")
+
+@steam_admin_cmd.assign("清理无效群")
+async def steam_clear_inactive_groups_handle(target: MsgTarget):
+    global group_list, exclude_game, inactive_groups
+    if not inactive_groups:
+        await UniMessage(f"当前没有无效群需要清理{config_steam.steam_tail_tone}").send()
+        return
+    
+    removed_groups = []
+    for group_id in inactive_groups[:]:  # 使用副本避免修改时迭代
+        send_target = await get_group_target_bot(group_id)
+        if send_target:
+            logger.info(f"Group {group_id} is active again, removing from inactive_groups")
+            inactive_groups.remove(group_id)
+            continue
+        if group_id in group_list:
+            removed_groups.append(group_id)
+            del group_list[group_id]
+            if group_id in exclude_game:
+                del exclude_game[group_id]
+    
+    inactive_groups.clear()
+    inactive_groups_file.write_text(json.dumps(inactive_groups))
+    save_data()
+    
+    if removed_groups:
+        nodes = [
+            CustomNode(
+                uid=str(target.self_id),
+                name=str(index + 1),
+                content=UniMessage.text(f"已删除群号: {group_id}")
+            )
+            for index, group_id in enumerate(removed_groups)
+        ]
+        await UniMessage(Reference(nodes=nodes)).send()
+        logger.info(f"Superuser cleared inactive groups: {removed_groups}")
+    else:
+        await UniMessage(f"无效群已清空，但未找到匹配的群数据{config_steam.steam_tail_tone}").send()
 @scheduler.scheduled_job("cron", hour=config_steam.steam_subscribe_time.split(":")[0], minute=config_steam.steam_subscribe_time.split(":")[1])
 async def steam_subscribe():
     logger.info("steam定时尝试获取推送喜加一")

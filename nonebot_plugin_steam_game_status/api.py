@@ -27,6 +27,8 @@ from .source import (
     exclude_game,
     game_free_cache_file,
     game_free_cache,
+    inactive_groups,
+    inactive_groups_file,
     )
 require("nonebot_plugin_htmlrender")
 from nonebot_plugin_htmlrender import html_to_pic  # noqa: E402
@@ -193,6 +195,7 @@ def save_data():
     new_file_group.write_text(json.dumps(group_list)) 
     new_file_steam.write_text(json.dumps(steam_list))
     exclude_game_file.write_text(json.dumps(exclude_game))
+    inactive_groups_file.write_text(json.dumps(inactive_groups))
     
 async def no_private_rule(target: MsgTarget) -> bool:
     return not target.private
@@ -344,8 +347,18 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
                                 messages = await make_game_data_node_msg(send_target, forward_name, msgs)
                                 await send_node_msg(messages, app_id, send_target, bot)
                         else:
-                            # TODO: 收纳群号，统一情况群内数据
-                            pass
+                                # 收集 bot 不在群内的群号
+                            if group_id not in inactive_groups:
+                                logger.info(f"Group {group_id} added to inactive_groups (no bot available)")
+                                inactive_groups.append(group_id)
+                                inactive_groups_file.write_text(json.dumps(inactive_groups))
+                    else:
+                        # 群未订阅喜加一，检查是否无 bot
+                        send_target = await get_group_target_bot(group_id)
+                        if not send_target and group_id not in inactive_groups:
+                            logger.info(f"Group {group_id} added to inactive_groups (no bot available)")
+                            inactive_groups.append(group_id)
+                            inactive_groups_file.write_text(json.dumps(inactive_groups))
     else:
         logger.info("steam喜加一暂无结果")
         return "steam喜加一暂无结果"
