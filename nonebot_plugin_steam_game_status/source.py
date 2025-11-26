@@ -158,7 +158,7 @@ steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8"))
 gameid2name = json.loads(game_cache_file.read_text("utf8"))
 exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf8"))
 game_free_cache: List[str] = json.loads(game_free_cache_file.read_text("utf8"))
-# 无 bot 的群号列表
+# 与bot失联的group列表
 inactive_groups: List[str] = []
 inactive_groups_file: Path = data_dir / "inactive_groups.json"
 
@@ -167,10 +167,11 @@ if inactive_groups_file.exists():
     try:
         inactive_groups = json.loads(inactive_groups_file.read_text("utf8"))
     except json.JSONDecodeError:
-        logger.error("Failed to parse inactive_groups.json, initializing as empty list")
+        logger.warning("Failed to parse inactive_groups.json, initializing as empty list")
         inactive_groups = []
 else:
     inactive_groups_file.write_text("[]")
+    
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>

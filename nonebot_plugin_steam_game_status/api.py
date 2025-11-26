@@ -191,7 +191,7 @@ async def get_history_price(game_uuid: str, client: HTTPClientSession, location:
         raise ConnectionError(f"gameid_to_uuid 获取失败，game_uuid_id:{game_uuid}，res code:{res.status_code}，res text:{res.text}")
 
 def save_data():
-    global steam_list,group_list,exclude_game
+    global steam_list, group_list, exclude_game, inactive_groups
     new_file_group.write_text(json.dumps(group_list)) 
     new_file_steam.write_text(json.dumps(steam_list))
     exclude_game_file.write_text(json.dumps(exclude_game))
@@ -346,19 +346,9 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
                                 logger.debug(f"steam获取推送喜加一信息来源用户订阅，app_id:{app_id} target:{send_target.id} {send_target.adapter}")
                                 messages = await make_game_data_node_msg(send_target, forward_name, msgs)
                                 await send_node_msg(messages, app_id, send_target, bot)
-                        else:
-                                # 收集 bot 不在群内的群号
-                            if group_id not in inactive_groups:
-                                logger.info(f"Group {group_id} added to inactive_groups (no bot available)")
-                                inactive_groups.append(group_id)
-                                inactive_groups_file.write_text(json.dumps(inactive_groups))
-                    else:
-                        # 群未订阅喜加一，检查是否无 bot
-                        send_target = await get_group_target_bot(group_id)
-                        if not send_target and group_id not in inactive_groups:
-                            logger.info(f"Group {group_id} added to inactive_groups (no bot available)")
-                            inactive_groups.append(group_id)
-                            inactive_groups_file.write_text(json.dumps(inactive_groups))
+                            else:
+                                await test_group_active(group_id)    
+                        
     else:
         logger.info("steam喜加一暂无结果")
         return "steam喜加一暂无结果"
@@ -378,3 +368,76 @@ async def get_group_target_bot(id: str) -> Tuple[Optional[ModTarget], Optional[B
         send_target.self_id = bot.self_id
         logger.trace(f"目标id：{id}，send_target: {send_target}，bot：{bot}")
         return send_target, bot
+
+async def test_group_active(group_id: str):
+    '''### 测试群组id是否还关联bot
+    会自动加入和移出失联列表'''
+    target, bot = await get_group_target_bot(group_id)
+    if target and bot:
+        await out_inactive_groups(group_id)
+    else:
+        await join_inactive_groups(group_id)
+    save_data()
+
+async def join_inactive_groups(group_id: str):
+    '''将群组id加入失联列表'''
+    global inactive_groups
+    if group_id not in inactive_groups:
+        inactive_groups.append(group_id)
+        logger.info(f"群组id： {group_id} 已添加到失联群组列表")
+
+async def out_inactive_groups(group_id: str):
+    '''将群组id移出失联列表'''
+    global inactive_groups
+    if group_id in inactive_groups:
+        inactive_groups.remove(group_id)
+        logger.info(f"群组id： {group_id} 已从失联群组列表移除")
+
+async def get_inactive_groups_list(target: Target) -> UniMessage:
+    '''获取失联群组列表'''
+    global inactive_groups,group_list
+    try:
+        msgs: List[CustomNode] = []
+        msgs10: List[str] = []
+        for i, group_id in enumerate(inactive_groups):
+            if i % 10 == 0 and i != 0:
+                msgs.append(
+                    CustomNode(
+                        uid=str(target.self_id),
+                        name=str(i+1),
+                        content='\n'.join(msgs10)
+                        ))
+                msgs10.clear()
+            else:
+                msgs10.append(f"{group_id} - {group_list[group_id]['adapter']}")
+        if msgs10:
+            msgs.append(
+                CustomNode(
+                    uid=str(target.self_id),
+                    name=str(len(inactive_groups)),
+                    content='\n'.join(msgs10)
+                    ))
+        if msgs:
+            return UniMessage(Reference(nodes=msgs))
+        else:
+            return UniMessage(f"当前无失联群组{config_steam.steam_tail_tone}")
+    except Exception as e:
+        logger.warning(f"获取steam失联群组列表异常：{e}")
+        return UniMessage(f"获取steam失联群组列表异常{config_steam.steam_tail_tone}：{e}")
+
+async def clear_inactive_groups_list(target: Target) -> UniMessage:
+    '''清理失联群组列表'''
+    global inactive_groups, group_list
+    try:
+        inactive_groups_mirror = inactive_groups.copy()
+        num = len(inactive_groups_mirror)
+        for group_id in inactive_groups_mirror:
+            if group_id in group_list:
+                inactive_groups.remove(group_id)
+                del group_list[group_id]
+        save_data()
+        logger.info(f"清理steam失联群组列表成功，清理数量：{num}")
+        return UniMessage(f"清理steam失联群组列表成功{config_steam.steam_tail_tone}，清理数量：{num}")
+    except Exception as e:
+        logger.warning(f"清理steam失联群组列表异常：{e}")
+        return UniMessage(f"清理steam失联群组列表异常{config_steam.steam_tail_tone}：{e}")
