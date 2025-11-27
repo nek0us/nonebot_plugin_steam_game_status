@@ -51,7 +51,10 @@ def get_target(group_id: str) -> ModTarget:
 @asynccontextmanager
 async def playwright_context():
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
+        browser = await pw.chromium.launch(
+            headless=True,
+            proxy={"server": config_steam.steam_proxy} if config_steam.steam_proxy else None,
+            )
         context = await browser.new_context()
         try:
             yield context
