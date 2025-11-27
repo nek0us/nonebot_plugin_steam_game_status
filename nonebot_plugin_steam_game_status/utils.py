@@ -47,3 +47,14 @@ def get_target(group_id: str) -> ModTarget:
         adapter=to_enum(adapter_name)
         )
     return target
+
+@asynccontextmanager
+async def playwright_context():
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        context = await browser.new_context()
+        try:
+            yield context
+        finally:
+            await context.close()
+            await browser.close()

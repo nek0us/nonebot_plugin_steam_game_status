@@ -18,7 +18,7 @@ from nonebot.plugin import inherit_supported_adapters
 
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
-from .utils import http_client, get_target, driver, HTTPClientSession, to_enum
+from .utils import http_client, driver, HTTPClientSession, to_enum
 from .model import UserData, GroupData3, SafeResponse
 from .config import Config,__version__, config_steam, bot_name, get_steam_api_domain
 from .api import (
@@ -36,6 +36,7 @@ from .api import (
     get_free_games_info,
     get_group_target_bot,
     test_group_active,
+    get_steam_playtime,
     )
 from .source import (
     new_file_group,
@@ -50,7 +51,7 @@ from .source import (
 
 require("nonebot_plugin_alconna")
 from nonebot_plugin_alconna import Arparma, on_alconna, Match  # noqa: E402
-from nonebot_plugin_alconna.uniseg import UniMessage,CustomNode,Reference,Target,MsgTarget  # noqa: E402
+from nonebot_plugin_alconna.uniseg import UniMessage,CustomNode,Reference,MsgTarget  # noqa: E402
 
 require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler  # noqa: E402
@@ -338,7 +339,7 @@ steam_command_alc = Alconna(
     Option("排除列表",separators="",compact=True),
     Option("list", alias=["列表", "绑定列表", "播报列表"],separators="",compact=True),
     Option("播报", Args["status", str],separators="",compact=True),
-    Option("steam墙", separators="",compact=True),
+    Option("墙", Args["user", str], separators="",compact=True),
     Option("喜加一", Args["action", Optional[Literal["订阅", "退订"]]], separators="", compact=True),
     Option("失联群列表", separators="", compact=True),
     Option("失联群清理", separators="", compact=True),
@@ -537,66 +538,15 @@ async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[s
     if res:
         await matcher.finish(res)
 
-@steam_cmd.assign("steam墙")
+@steam_cmd.assign("墙")
 async def steam_wall(matcher: Matcher, user: Match[str]):
-    arg = user.result.strip()
-    url = f"https://playtime-panorama.superserio.us/{arg}"
-
-    async def capture():
-        from playwright.async_api import async_playwright
-        pw = await async_playwright().start()
-        browser = await pw.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.set_viewport_size({"width": 2560, "height": 1600})
-        await page.goto(url, wait_until="networkidle", timeout=60000)
-
-        # 等加载完成或出错
-        await page.wait_for_function("""
-            () => {
-                if (document.querySelector('.error')) return true;
-                const imgs = document.querySelectorAll('img');
-                return Array.from(imgs).every(img => img.complete && img.naturalWidth > 0);
-            }
-        """, timeout=120000)
-
-        # 如果有错误提示，直接返回文字
-        if await page.query_selector('.error'):
-            error_text = await page.inner_text('.error')
-            raise Exception(f"页面错误：{error_text}")
-
-        screenshot = await page.screenshot(full_page=True, type="png")
-        await browser.close()
-        return screenshot
-
-    await matcher.send("正在渲染蒸汽墙，大概需要15~40秒，请耐心等待……")
     try:
-        img_bytes = await asyncio.wait_for(capture(), timeout=180)
-        await matcher.finish(UniMessage.image(img_bytes))
-    except asyncio.TimeoutError:
-        await matcher.finish(f"渲染超时了（>180s），游戏可能非常多或网络卡顿\n直接打开网页版吧：{url}")
+        screenshot = await get_steam_playtime(user.result)
+        await UniMessage.image(raw=screenshot).send()
     except Exception as e:
-        if "error" in str(e).lower() or "not found" in str(e).lower():
-            await matcher.finish("这个Steam账号不存在、未公开游戏记录或自定义URL错误哦~")
-        else:
-            await matcher.finish(f"渲染失败：{e}\n可以直接打开：{url}")
+        await UniMessage.text(f"获取 Steam 游戏时长拼图出错{config_steam.steam_tail_tone} ：{e.args}").send()
+    await matcher.finish()
 
-
-
-# 新的超管指令 Alconna
-# steam_admin_alc = Alconna(
-#     "steam_admin",
-#     Option("无效群列表", alias=["list_inactive"], separators="", compact=True),
-#     Option("清理无效群", alias=["clear_inactive"], separators="", compact=True),
-#     separators="",
-#     meta=CommandMeta(compact=True, description="Steam 超管指令，仅限超管使用")
-# )
-
-# 新的超管指令响应器
-# steam_admin_cmd = on_alconna(
-#     steam_admin_alc,
-#     priority=config_steam.steam_command_priority + 1,  # 优先级略高于普通命令
-#     permission=SUPERUSER  # 仅限超管
-# )
 steam_admin_cmd = on_alconna(
     steam_command_alc,
     priority=config_steam.steam_command_priority,

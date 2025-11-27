@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .config import bot_name, get_steam_store_domain
 from .model import SafeResponse, ModTarget
-from .utils import config_steam,http_client,get_target,HTTPClientSession
+from .utils import config_steam, http_client, get_target, playwright_context, HTTPClientSession
 from .source import (
     HTML_TEMPLATE,
     gameid2name,
@@ -441,3 +441,22 @@ async def clear_inactive_groups_list(target: Target) -> UniMessage:
     except Exception as e:
         logger.warning(f"清理steam失联群组列表异常：{e}")
         return UniMessage(f"清理steam失联群组列表异常{config_steam.steam_tail_tone}：{e}")
+
+async def get_steam_playtime(steam_id: str) -> bytes:
+    '''通过steam_id获取游戏游玩时长拼图
+    Args:
+        steam_id (str): Steam ID
+    Return:
+        bytes: 渲染后的图片字节'''
+    url = f"https://playtime-panorama.superserio.us/{steam_id}"
+    logger.info(f"Steam 游戏时长拼图获取，ID:{steam_id}, url: {url}")
+    async with playwright_context() as pc:
+        page = await pc.new_page()
+        await page.set_viewport_size({"width": 1920, "height": 1080})
+        await page.goto(url=url, timeout=60000)
+        await page.wait_for_load_state('networkidle')
+        await page.wait_for_selector("#games-stage", state="visible")
+        games_stage = await page.query_selector("#games-stage")
+        if games_stage:
+            return await games_stage.screenshot(type="png")
+        raise Exception("no games_stage")
