@@ -454,8 +454,11 @@ async def get_steam_playtime(steam_id: str) -> bytes:
         page = await pc.new_page()
         await page.set_viewport_size({"width": 1920, "height": 1080})
         await page.goto(url=url, timeout=60000)
-        await page.wait_for_load_state('networkidle')
-        await page.wait_for_selector("#games-stage", state="visible")
+        try:
+            await page.wait_for_load_state('networkidle')
+            await page.wait_for_selector("#games-stage", state="visible", timeout=60000)
+        except TimeoutError:
+            logger.warning(f"Steam 游戏时长拼图获取，ID:{steam_id}, url: {url}, timeout")
         games_stage = await page.query_selector("#games-stage")
         if games_stage:
             return await games_stage.screenshot(type="png")
