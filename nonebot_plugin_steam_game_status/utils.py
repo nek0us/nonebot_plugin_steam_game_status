@@ -3,6 +3,7 @@ from typing import AsyncIterator
 from contextlib import asynccontextmanager
 from nonebot.internal.driver import HTTPClientMixin, HTTPClientSession
 from nonebot_plugin_alconna.uniseg import SupportAdapter
+from playwright.async_api import async_playwright, Browser, BrowserContext
 
 from .config import config_steam, get_steam_api_domain
 from .source import group_list
@@ -49,13 +50,13 @@ def get_target(group_id: str) -> ModTarget:
     return target
 
 @asynccontextmanager
-async def playwright_context():
+async def playwright_context() -> AsyncIterator[BrowserContext]:
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
+        browser: Browser = await pw.chromium.launch(
             headless=True,
             proxy={"server": config_steam.steam_proxy} if config_steam.steam_proxy else None,
             )
-        context = await browser.new_context()
+        context: BrowserContext = await browser.new_context()
         try:
             yield context
         finally:

@@ -544,6 +544,7 @@ async def steam_wall(matcher: Matcher, user: Match[str]):
         screenshot = await get_steam_playtime(user.result)
         await UniMessage.image(raw=screenshot).send()
     except Exception as e:
+        logger.warning(f"获取 Steam 游戏时长拼图出错：{e.args}")
         await UniMessage.text(f"获取 Steam 游戏时长拼图出错{config_steam.steam_tail_tone} ：{e.args}").send()
     await matcher.finish()
 
