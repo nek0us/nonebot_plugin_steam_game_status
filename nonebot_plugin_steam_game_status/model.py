@@ -23,6 +23,7 @@ class GroupData2(GroupData):
     
 class GroupData3(GroupData2):
     xijiayi: bool
+    watch_games: List[str] = []
     
 
 class UserData(TypedDict):

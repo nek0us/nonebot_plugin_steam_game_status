@@ -27,6 +27,8 @@ from .source import (
     exclude_game,
     game_free_cache_file,
     game_free_cache,
+    game_discounted_cache,
+    game_discounted_cache_file,
     inactive_groups,
     inactive_groups_file,
     )
@@ -196,6 +198,7 @@ def save_data():
     new_file_steam.write_text(json.dumps(steam_list))
     exclude_game_file.write_text(json.dumps(exclude_game))
     inactive_groups_file.write_text(json.dumps(inactive_groups))
+    game_discounted_cache_file.write_text(json.dumps(inactive_groups))
     
 async def no_private_rule(target: MsgTarget) -> bool:
     return not target.private
@@ -352,7 +355,40 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
     else:
         logger.info("steam喜加一暂无结果")
         return "steam喜加一暂无结果"
-    
+
+async def get_discounted_games_info(target: Optional[MsgTarget] = None):
+    if not config_steam.steam_web_key:
+        return
+
+    logger.info("开始检查已关注的游戏是否打折...")
+
+    async with http_client() as client:
+        for group_id, gdata in group_list.items():
+            if not gdata["watch_games"]:
+                continue
+
+            for appid in gdata["watch_games"][:]: 
+                res_json = await get_game_info(appid)
+                if "error" in res_json or not res_json["success"]:
+                    continue
+
+                game_data = res_json["data"]
+                price_info = await gameid_to_price(appid, game_data, res_json["from"])
+
+                # 判断是否有折扣（有原价且折扣百分比 > 0）
+                has_discount = price_info.get("percent") and price_info["percent"] != ""
+
+                if has_discount :  
+                    target = await get_group_target_bot(group_id)
+                    if not target:
+                        continue
+
+                    forward_name, msgs = await get_game_data_msg(res_json)
+                    msgs.insert(0, UniMessage.text(f"游戏打折{price_info['percent']}"))
+                    messages = await make_game_data_node_msg(target, forward_name, msgs)
+
+                    await send_node_msg(messages, appid, target)
+    logger.info("打折检查任务完成")
 async def get_group_target_bot(id: str) -> Tuple[Optional[ModTarget], Optional[Bot]]:
     send_target = get_target(id)
     bots = await send_target.mod_select()
