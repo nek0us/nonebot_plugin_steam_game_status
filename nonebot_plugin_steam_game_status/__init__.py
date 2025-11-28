@@ -34,9 +34,11 @@ from .api import (
     make_game_data_node_msg,
     send_node_msg,
     get_free_games_info,
+    game_discounted_cache,
     get_group_target_bot,
     test_group_active,
     get_steam_playtime,
+    get_discounted_games_info,
     )
 from .source import (
     new_file_group,
@@ -336,6 +338,8 @@ steam_command_alc = Alconna(
     Option("del", Args["id", str], alias=["解绑", "删除", ".del"],separators="",compact=True),
     Option("屏蔽", Args["game", AllParam(str)],separators="",compact=True),
     Option("恢复", Args["game", AllParam(str)],separators="",compact=True),
+    Option("打折订阅", Args["game", AllParam(str)],separators="",compact=True),
+    Option("打折退订", Args["game", AllParam(str)],separators="",compact=True),
     Option("排除列表",separators="",compact=True),
     Option("list", alias=["列表", "绑定列表", "播报列表"],separators="",compact=True),
     Option("播报", Args["status", str],separators="",compact=True),
@@ -347,6 +351,30 @@ steam_command_alc = Alconna(
     meta=CommandMeta(compact=True)
 )
 steam_cmd = on_alconna(steam_command_alc, priority=config_steam.steam_command_priority, rule=no_private_rule)        
+@steam_cmd.assign("打折订阅")
+async def steam_discounted_games_bind(target: MsgTarget,matcher: Matcher, game: Match[str]):
+    group_id = str(target.id)
+    game_id = game.result.strip()
+    if group_id not in game_discounted_cache:
+        game_discounted_cache[group_id] = []
+    if game_id in game_discounted_cache[group_id]:
+        await matcher.finish(f"已订阅过 {config_steam.steam_tail_tone}")
+    game_discounted_cache[group_id].append(game_id)
+    save_data()
+    await matcher.finish(f"已订阅打折提醒：{game_id}{config_steam.steam_tail_tone}")
+
+@steam_cmd.assign("打折退订")
+async def steam_discounted_games_del(target: MsgTarget,matcher: Matcher, game: Match[str]):
+    group_id = str(target.id)
+    game_id = game.result.strip()
+    if group_id not in game_discounted_cache or game_id not in game_discounted_cache[group_id]:
+        await matcher.finish(f"没有订阅这个游戏 {config_steam.steam_tail_tone}")
+    game_discounted_cache[group_id].remove(game_id)
+    if not game_discounted_cache[group_id]:
+        del game_discounted_cache[group_id]
+    save_data()
+    await matcher.finish(f"已取消订阅游戏 {game_id}{config_steam.steam_tail_tone}")
+
 @steam_cmd.assign("add")
 async def steam_bind_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
     steam_id = id.result
@@ -569,3 +597,9 @@ async def steam_subscribe():
     logger.info("steam定时尝试获取推送喜加一")
     await get_free_games_info()
     logger.info("steam定时尝试获取推送喜加一结束")
+
+@scheduler.scheduled_job("cron", hour=config_steam.steam_subscribe_time.split(":")[0], minute=config_steam.steam_subscribe_time.split(":")[1])
+async def sbeam_subscribe():
+    logger.info("steam定时尝试获取推送打折")
+    await get_discounted_games_info()
+    logger.info("steam定时尝试获取推送打折结束")

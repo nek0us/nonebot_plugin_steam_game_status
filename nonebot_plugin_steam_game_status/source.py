@@ -38,6 +38,7 @@ new_file_group = data_dir / "steam_group_list.json"
 game_cache_file = data_dir / "game_cache.json"
 exclude_game_file = data_dir / "exclude_game"
 game_free_cache_file = data_dir / "game_free_cache.json"
+game_discounted_cache_file = data_dir / "game_discounted_cache.json"
 
 exclude_game_default = ["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
 
@@ -52,6 +53,7 @@ if not old_dirpath.exists():
         game_cache_file.write_text("{}")
         exclude_game_file.write_text("{}")
         game_free_cache_file.write_text("[]")
+        game_discounted_cache_file.write_text("[]")
     else:
         # 存在，准备好的新用户
         # 看看exclude在不在
@@ -158,6 +160,7 @@ steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8"))
 gameid2name = json.loads(game_cache_file.read_text("utf8"))
 exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf8"))
 game_free_cache: List[str] = json.loads(game_free_cache_file.read_text("utf8"))
+game_discounted_cache:List[str] = json.loads(game_discounted_cache_file.read_text("utf8"))
 # 与bot失联的group列表
 inactive_groups: List[str] = []
 inactive_groups_file: Path = data_dir / "inactive_groups.json"
