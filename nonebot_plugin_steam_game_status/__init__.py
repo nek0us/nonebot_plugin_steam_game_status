@@ -19,7 +19,7 @@ from nonebot.plugin import inherit_supported_adapters
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
 from .utils import http_client, driver, HTTPClientSession, to_enum
-from .model import UserData, GroupData3, SafeResponse
+from .model import UserData, SafeResponse, create_group_data
 from .config import Config,__version__, config_steam, bot_name, get_steam_api_domain
 from .api import (
     clear_inactive_groups_list,
@@ -34,7 +34,7 @@ from .api import (
     make_game_data_node_msg,
     send_node_msg,
     get_free_games_info,
-    game_discounted_cache,
+    game_discounted_subscribe,
     get_group_target_bot,
     test_group_active,
     get_steam_playtime,
@@ -338,8 +338,8 @@ steam_command_alc = Alconna(
     Option("del", Args["id", str], alias=["解绑", "删除", ".del"],separators="",compact=True),
     Option("屏蔽", Args["game", AllParam(str)],separators="",compact=True),
     Option("恢复", Args["game", AllParam(str)],separators="",compact=True),
-    Option("打折订阅", Args["game", AllParam(str)],separators="",compact=True),
-    Option("打折退订", Args["game", AllParam(str)],separators="",compact=True),
+    Option("打折订阅", Args["game", AllParam(str)], alias=["折扣订阅", "促销订阅", "低价订阅"],separators="",compact=True),
+    Option("打折退订", Args["game", AllParam(str)], alias=["折扣退订", "促销退订", "低价退订"],separators="",compact=True),
     Option("排除列表",separators="",compact=True),
     Option("list", alias=["列表", "绑定列表", "播报列表"],separators="",compact=True),
     Option("播报", Args["status", str],separators="",compact=True),
@@ -353,27 +353,40 @@ steam_command_alc = Alconna(
 steam_cmd = on_alconna(steam_command_alc, priority=config_steam.steam_command_priority, rule=no_private_rule)        
 @steam_cmd.assign("打折订阅")
 async def steam_discounted_games_bind(target: MsgTarget,matcher: Matcher, game: Match[str]):
-    group_id = str(target.id)
-    game_id = game.result.strip()
-    if group_id not in game_discounted_cache:
-        game_discounted_cache[group_id] = []
-    if game_id in game_discounted_cache[group_id]:
-        await matcher.finish(f"已订阅过 {config_steam.steam_tail_tone}")
-    game_discounted_cache[group_id].append(game_id)
+    global game_discounted_subscribe
+    game_id = str(game.result)
+    if game_id not in game_discounted_subscribe:
+        game_discounted_subscribe[game_id] = []
+    if target.id in game_discounted_subscribe[game_id]:
+        await matcher.finish(f"已订阅过 {config_steam.steam_tail_tone}",reply_message=True)
+    try:
+        info = await get_discounted_games_info(target, game_id)
+    except Exception as e:
+        await matcher.finish(f"订阅出错了{config_steam.steam_tail_tone}, {e.args}")
+    
+    game_discounted_subscribe[game_id].append(target.id)
     save_data()
-    await matcher.finish(f"已订阅打折提醒：{game_id}{config_steam.steam_tail_tone}")
+    if not info:
+        await matcher.finish(f"免费或未推出游戏不能订阅{config_steam.steam_tail_tone}",reply_message=True)
+    else:
+        if isinstance(info, str):
+            await matcher.finish(f"已订阅折扣提醒{config_steam.steam_tail_tone},\n{info}",reply_message=True)
+        else:
+            await matcher.finish(f"该游戏正在打折{config_steam.steam_tail_tone}",reply_message=True)
+
 
 @steam_cmd.assign("打折退订")
 async def steam_discounted_games_del(target: MsgTarget,matcher: Matcher, game: Match[str]):
-    group_id = str(target.id)
-    game_id = game.result.strip()
-    if group_id not in game_discounted_cache or game_id not in game_discounted_cache[group_id]:
-        await matcher.finish(f"没有订阅这个游戏 {config_steam.steam_tail_tone}")
-    game_discounted_cache[group_id].remove(game_id)
-    if not game_discounted_cache[group_id]:
-        del game_discounted_cache[group_id]
+    global game_discounted_subscribe
+    game_id = str(game.result)
+    if game_id not in game_discounted_subscribe or target.id not in game_discounted_subscribe[game_id]:
+        await matcher.finish(f"未订阅过 {config_steam.steam_tail_tone}",reply_message=True)
+    game_discounted_subscribe[game_id].remove(target.id)
+    if not game_discounted_subscribe[game_id]:
+        del game_discounted_subscribe[game_id]
     save_data()
-    await matcher.finish(f"已取消订阅游戏 {game_id}{config_steam.steam_tail_tone}")
+    await matcher.finish(f"已退订折扣提醒{config_steam.steam_tail_tone}",reply_message=True)
+
 
 @steam_cmd.assign("add")
 async def steam_bind_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
@@ -389,12 +402,7 @@ async def steam_bind_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
     global steam_list,group_list,exclude_game
     if str(target.id) not in group_list:
         # 本群还没记录
-        group_list[str(target.id)] = GroupData3(
-            status = True,
-            user_list = [],
-            adapter = to_enum(target.adapter).value if target.adapter else "",
-            xijiayi= False,
-            )
+        group_list[str(target.id)] = create_group_data(adapter = to_enum(target.adapter).value if target.adapter else "")
         exclude_game[str(target.id)] = exclude_game_default
         
     
@@ -443,12 +451,7 @@ async def steam_del_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
     
     if str(target.id) not in group_list:
         # 本群还没记录
-        group_list[str(target.id)] = GroupData3(
-            status = True,
-            user_list = [],
-            adapter = to_enum(target.adapter).value if target.adapter else "",
-            xijiayi= False,
-            )
+        group_list[str(target.id)] = create_group_data(adapter = to_enum(target.adapter).value if target.adapter else "")
         await matcher.finish(f"本群不存在 Steam 绑定记录{config_steam.steam_tail_tone}")
     
     if steam_id not in group_list[str(target.id)]["user_list"]:
@@ -474,12 +477,7 @@ async def steam_clude_handle(target: MsgTarget,arp: Arparma,matcher: Matcher, ga
     game_name = game.result
     if str(target.id) not in group_list:
         # 本群还没记录
-        group_list[str(target.id)] = GroupData3(
-            status = True,
-            user_list = [],
-            adapter = to_enum(target.adapter).value if target.adapter else "",
-            xijiayi= False,
-            )
+        group_list[str(target.id)] = create_group_data(adapter = to_enum(target.adapter).value if target.adapter else "")
         exclude_game[str(target.id)] = exclude_game_default
         exclude_game_file.write_text(json.dumps(exclude_game))
         new_file_group.write_text(json.dumps(group_list))
@@ -502,12 +500,7 @@ async def steam_exclude_list_handle(target: MsgTarget):
     global group_list,exclude_game
     if str(target.id) not in group_list:
         # 本群还没记录
-        group_list[str(target.id)] = GroupData3(
-            status = True,
-            user_list = [],
-            adapter = to_enum(target.adapter).value if target.adapter else "",
-            xijiayi= False,
-            )
+        group_list[str(target.id)] = create_group_data(adapter = to_enum(target.adapter).value if target.adapter else "")
         exclude_game[str(target.id)] = exclude_game_default
         exclude_game_file.write_text(json.dumps(exclude_game))
         new_file_group.write_text(json.dumps(group_list))
@@ -546,12 +539,7 @@ async def steam_on_handle(target: MsgTarget, status: Match[str]):
     else:
         global group_list
         if str(target.id) not in group_list:
-            group_list[str(target.id)] = GroupData3(
-            status = True,
-            user_list = [],
-            adapter = to_enum(target.adapter).value if target.adapter else "",
-            xijiayi= False,
-            )
+            group_list[str(target.id)] = create_group_data(adapter = to_enum(target.adapter).value if target.adapter else "")
         group_list[str(target.id)]["status"] = True if status.result == "开启" else False
         save_data()
         await UniMessage(f"Steam 播报已{status.result}{config_steam.steam_tail_tone}").send(reply_to=True)

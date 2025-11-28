@@ -39,6 +39,7 @@ game_cache_file = data_dir / "game_cache.json"
 exclude_game_file = data_dir / "exclude_game"
 game_free_cache_file = data_dir / "game_free_cache.json"
 game_discounted_cache_file = data_dir / "game_discounted_cache.json"
+game_discounted_subscribe_file = data_dir / "game_discounted_subscribe.json"
 
 exclude_game_default = ["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
 
@@ -53,7 +54,6 @@ if not old_dirpath.exists():
         game_cache_file.write_text("{}")
         exclude_game_file.write_text("{}")
         game_free_cache_file.write_text("[]")
-        game_discounted_cache_file.write_text("[]")
     else:
         # 存在，准备好的新用户
         # 看看exclude在不在
@@ -74,9 +74,7 @@ if not old_dirpath.exists():
                     exclude_game_tmp[group_id] = exclude_game_default
             exclude_game_file.write_text(json.dumps(exclude_game_tmp))
         
-        # 0.2.2 25.09.08 版本喜加一适配
-        if not game_free_cache_file.exists():
-            game_free_cache_file.write_text("[]")
+
 else:
     # 存在旧文件，看看新的在不在
     if not new_file_steam.exists():
@@ -154,6 +152,15 @@ if value_25_09_08:
         new_file_group.write_text(json.dumps(steam_group_dict_25_09_08))
         logger.success("steam 0.2.2 25.09.08 xijiayi更新数据成功")
 
+# 0.2.2 25.09.08 版本喜加一适配
+if not game_free_cache_file.exists():
+    game_free_cache_file.write_text("[]")
+
+# 25.11.28 低价订阅适配
+if not game_discounted_cache_file.exists():
+    game_discounted_cache_file.write_text("[]")
+if not game_discounted_subscribe_file.exists():
+    game_discounted_subscribe_file.write_text("{}")
 
 group_list: Dict[str, GroupData3] = json.loads(new_file_group.read_text("utf8"))  
 steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8")) 
@@ -161,6 +168,7 @@ gameid2name = json.loads(game_cache_file.read_text("utf8"))
 exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf8"))
 game_free_cache: List[str] = json.loads(game_free_cache_file.read_text("utf8"))
 game_discounted_cache:List[str] = json.loads(game_discounted_cache_file.read_text("utf8"))
+game_discounted_subscribe: Dict[str, List[str]] = json.loads(game_discounted_subscribe_file.read_text("utf8"))
 # 与bot失联的group列表
 inactive_groups: List[str] = []
 inactive_groups_file: Path = data_dir / "inactive_groups.json"
