@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-steam-game-status"
-version = "0.3.0"
+version = "0.3.1"
 description = "播报群友 Steam 游戏状态"
 authors = [
     {name = "nek0us", email = "nekouss@mail.com"},
