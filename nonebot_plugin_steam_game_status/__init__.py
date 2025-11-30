@@ -354,7 +354,7 @@ steam_cmd = on_alconna(steam_command_alc, priority=config_steam.steam_command_pr
 
 @steam_cmd.assign("add")
 async def steam_bind_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
-    steam_id = id.result
+    steam_id = str(id.result)
     if len(steam_id) != 17:
         try:
             steam_id = int(steam_id)
@@ -401,7 +401,7 @@ async def steam_bind_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
                     
 @steam_cmd.assign("del")
 async def steam_del_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
-    steam_id = id.result
+    steam_id = str(id.result)
     if len(steam_id) != 17:
         try:
             steam_id = int(steam_id)
@@ -438,7 +438,7 @@ steam_cmd_rec = steam_cmd.dispatch("恢复")
 async def steam_clude_handle(target: MsgTarget,arp: Arparma,matcher: Matcher, game: Match[str]):
     global group_list,exclude_game
     handle = next(iter(arp.components))
-    game_name = game.result
+    game_name = str(game.result)
     if str(target.id) not in group_list:
         # 本群还没记录
         group_list[str(target.id)] = create_group_data(adapter = to_enum(target.adapter).value if target.adapter else "")
@@ -498,22 +498,22 @@ async def steam_bind_list_handle(target: MsgTarget):
 
 @steam_cmd.assign("播报")
 async def steam_on_handle(target: MsgTarget, status: Match[str]):
-    if status.result not in ("开启", "关闭"):
+    if str(status.result) not in ("开启", "关闭"):
         await UniMessage(f"仅允许设置播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
         if str(target.id) not in group_list:
             group_list[str(target.id)] = create_group_data(adapter = to_enum(target.adapter).value if target.adapter else "")
-        group_list[str(target.id)]["status"] = True if status.result == "开启" else False
+        group_list[str(target.id)]["status"] = True if str(status.result) == "开启" else False
         save_data()
-        await UniMessage(f"Steam 播报已{status.result}{config_steam.steam_tail_tone}").send(reply_to=True)
+        await UniMessage(f"Steam 播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 @steam_cmd.assign("喜加一")
 async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[str]):
     if action.result:
-        group_list[target.id]["xijiayi"] = True if action.result == "订阅" else False
+        group_list[target.id]["xijiayi"] = True if str(action.result) == "订阅" else False
         save_data()
-        await matcher.finish(f"steam 喜加一 已{action.result}{config_steam.steam_tail_tone}")
+        await matcher.finish(f"steam 喜加一 已{str(action.result)}{config_steam.steam_tail_tone}")
     res = await get_free_games_info(target)
     if res:
         await matcher.finish(res)
@@ -521,7 +521,7 @@ async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[s
 @steam_cmd.assign("墙")
 async def steam_wall(matcher: Matcher, user: Match[str]):
     try:
-        screenshot = await get_steam_playtime(user.result)
+        screenshot = await get_steam_playtime(str(user.result))
         await UniMessage.image(raw=screenshot).send()
     except Exception as e:
         logger.warning(f"获取 Steam 游戏时长拼图出错：{e.args}")
