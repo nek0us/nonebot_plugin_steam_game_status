@@ -48,6 +48,7 @@ from .source import (
     steam_list,
     group_list,
     exclude_game,
+    game_discounted_cache,
     )
 
 
@@ -528,34 +529,6 @@ async def steam_wall(matcher: Matcher, user: Match[str]):
         await UniMessage.text(f"获取 Steam 游戏时长拼图出错{config_steam.steam_tail_tone} ：{e.args}").send()
     await matcher.finish()
 
-steam_admin_cmd = on_alconna(
-    steam_command_alc,
-    priority=config_steam.steam_command_priority,
-    permission=SUPERUSER
-)
-
-@steam_admin_cmd.assign("失联群列表")
-async def steam_inactive_groups_handle(target: MsgTarget):
-    unimsg = await get_inactive_groups_list(target)
-    await unimsg.send()
-
-@steam_admin_cmd.assign("失联群清理")
-async def steam_clear_inactive_groups_handle(target: MsgTarget):
-    unimsg = await clear_inactive_groups_list(target)
-    await unimsg.send()
-
-@scheduler.scheduled_job("cron", hour=config_steam.steam_subscribe_time.split(":")[0], minute=config_steam.steam_subscribe_time.split(":")[1])
-async def steam_subscribe():
-    logger.info("steam定时尝试获取推送喜加一")
-    await get_free_games_info()
-    logger.info("steam定时尝试获取推送喜加一结束")
-
-@scheduler.scheduled_job("cron", hour=config_steam.steam_subscribe_time.split(":")[0], minute=config_steam.steam_subscribe_time.split(":")[1])
-async def sbeam_subscribe():
-    logger.info("steam定时尝试获取推送打折")
-    await get_discounted_games_info()
-    logger.info("steam定时尝试获取推送打折结束")
-
 @steam_cmd.assign("打折订阅")
 async def steam_discounted_games_bind(target: MsgTarget,matcher: Matcher, game: Match[str]):
     global game_discounted_subscribe
@@ -588,5 +561,64 @@ async def steam_discounted_games_del(target: MsgTarget,matcher: Matcher, game: M
     game_discounted_subscribe[game_id].remove(target.id)
     if not game_discounted_subscribe[game_id]:
         del game_discounted_subscribe[game_id]
+        if game_id in game_discounted_cache:
+            game_discounted_cache.remove(game_id)
     save_data()
     await matcher.finish(f"已退订折扣提醒{config_steam.steam_tail_tone}",reply_message=True)
+
+steam_admin_cmd = on_alconna(
+    steam_command_alc,
+    priority=config_steam.steam_command_priority,
+    permission=SUPERUSER
+)
+
+@steam_admin_cmd.assign("失联群列表")
+async def steam_inactive_groups_handle(target: MsgTarget):
+    unimsg = await get_inactive_groups_list(target)
+    await unimsg.send()
+
+@steam_admin_cmd.assign("失联群清理")
+async def steam_clear_inactive_groups_handle(target: MsgTarget):
+    unimsg = await clear_inactive_groups_list(target)
+    await unimsg.send()
+
+@driver.on_startup
+async def _init_steam_subscribe_jobs():
+    times = config_steam.steam_subscribe_time
+
+    for idx, t in enumerate(times):
+        hour_str, minute_str = t.split(":")
+        hour = int(hour_str)
+        minute = int(minute_str)
+
+        job_xijiayi_id = f"steam_xijiayi_subscribe_{idx}"
+        logger.info(f"注册 steam 订阅定时任务: {job_xijiayi_id} -> {hour:02d}:{minute:02d}")
+        job_discounted_id = f"steam_discounted_subscribe_{idx}"
+        logger.info(f"注册 steam 订阅定时任务: {job_discounted_id} -> {hour:02d}:{minute:02d}")
+
+        scheduler.add_job(
+            steam_subscribe,
+            "cron",
+            hour=hour,
+            minute=minute,
+            id=job_xijiayi_id,
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            sbeam_subscribe,
+            "cron",
+            hour=hour,
+            minute=minute,
+            id=job_discounted_id,
+            replace_existing=True,
+        )
+
+async def steam_subscribe():
+    logger.info("steam定时尝试获取推送喜加一")
+    await get_free_games_info()
+    logger.info("steam定时尝试获取推送喜加一结束")
+
+async def sbeam_subscribe():
+    logger.info("steam定时尝试获取推送打折")
+    await get_discounted_games_info()
+    logger.info("steam定时尝试获取推送打折结束")

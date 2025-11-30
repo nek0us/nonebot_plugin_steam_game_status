@@ -306,7 +306,7 @@ async def send_node_msg(messages: List[CustomNode], app_id: str,target: Optional
                 await UniMessage(Reference(nodes=new_new_msg)).send(target=target, bot=bot)
             except Exception as e:
                 logger.debug(f"steam app_id: {app_id} 消息再再次发送异常 {e}")
-                await UniMessage(f"steam app_id: {app_id} 似乎发不出去...").send(target=target, bot=bot, reply_to=True)
+                await UniMessage(f"steam app_id: {app_id} 似乎发不出去...").send(target=target, bot=bot, reply_to=False if isinstance(target, ModTarget) else True)
     
 async def get_free_games_list() -> List:
     game_appid_list = []
@@ -471,7 +471,7 @@ async def get_steam_playtime(steam_id: str) -> bytes:
         raise Exception("no games_stage")
 
 async def get_discounted_game_info(app_id: str) -> Tuple[dict, dict]:
-    logger.info(f"steam开始检查游戏id{app_id}是否打折...")
+    logger.info(f"steam开始检查游戏id {app_id} 是否打折...")
     res_json = await get_game_info(app_id)
     if "error" in res_json:
         logger.debug(f"主动获取折扣信息出错，app_id: {app_id}，res_json: {res_json}")
@@ -480,7 +480,7 @@ async def get_discounted_game_info(app_id: str) -> Tuple[dict, dict]:
     return res_json, price
 
 async def get_discounted_games_info(target: Optional[MsgTarget] = None, game_id_from_cmd: str = ""):
-    logger.info("开始检查已关注的游戏是否打折...")
+    logger.info("steam开始检查已关注的游戏是否打折...")
     if game_id_from_cmd and target:
         res_json, price = await get_discounted_game_info(game_id_from_cmd)
         if price["status"]:
@@ -511,14 +511,14 @@ async def get_discounted_games_info(target: Optional[MsgTarget] = None, game_id_
         if price["status"] or price["original"]:
             if game_id in game_discounted_cache:
                 # 冷却缓存列表中已存在，跳过
-                logger.debug(f"steam 游戏id:{game_id} 冷却缓存列表中已存在，跳过")
+                logger.debug(f"steam 游戏id: {game_id} 冷却缓存列表中已存在，跳过")
                 continue
-            logger.info(f"steam 游戏id:{game_id} 存在折扣，尝试获取")
+            logger.info(f"steam 游戏id: {game_id} 存在折扣，尝试获取")
             forward_name, msgs = await get_game_data_msg(res_json)
             for group_id in game_discounted_subscribe[game_id]:
                 send_target, bot = await get_group_target_bot(group_id)
                 if send_target:
-                    logger.debug(f"steam获取推送折扣信息来源用户订阅，app_id:{game_id} target:{send_target.id} {send_target.adapter}")
+                    logger.debug(f"steam获取推送折扣信息来源用户订阅，app_id: {game_id} target: {send_target.id} {send_target.adapter}")
                     messages = await make_game_data_node_msg(send_target, forward_name, msgs)
                     await send_node_msg(messages, game_id, send_target, bot)
                 else:
@@ -528,9 +528,9 @@ async def get_discounted_games_info(target: Optional[MsgTarget] = None, game_id_
         else:
             if game_id in game_discounted_cache:
                 # 已无折扣，从冷却缓存列表中删除
-                logger.debug(f"steam 游戏id:{game_id} 已无折扣，从冷却缓存列表中删除")
+                logger.debug(f"steam 游戏id: {game_id} 已无折扣，从冷却缓存列表中删除")
                 game_discounted_cache.remove(game_id)
-            logger.debug(f"steam 游戏id:{game_id} 未折扣，跳过")
+            logger.debug(f"steam 游戏id: {game_id} 未折扣，跳过")
             continue
     save_data()
     logger.info("steam打折检查任务完成")

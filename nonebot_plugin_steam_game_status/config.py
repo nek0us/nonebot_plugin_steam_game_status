@@ -23,7 +23,7 @@ class Config(BaseModel):
     steam_area_game: Union[bool, List[str]]= False
     steam_link_r18_game: Union[bool, List[str]] = False
     steam_tail_tone: str = ""
-    steam_subscribe_time: str = "08:00"
+    steam_subscribe_time: Union[str, List[str]] = ["08:00"]
     
     @validator("steam_isthereanydeal_key")
     def check_isthereanydeal_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
@@ -117,15 +117,27 @@ class Config(BaseModel):
         return v
         
     @validator("steam_subscribe_time")
-    def check_subscribe_time(cls,v: str) -> str:
+    def check_subscribe_time(cls,v: Union[str, List[str]]) -> List[str]:
         if v:
-            if ":" in v:
-                logger.success(f"steam_subscribe_time 订阅时间 {v} 读取成功")
+            if isinstance(v, str):
+                if ":" in v:
+                    logger.success(f"steam_subscribe_time 订阅时间 {v} 读取成功")
+                    return [v]
+                else:
+                    logger.exception(f"steam_subscribe_time 订阅时间 {v} 设置格式错误，将使用默认时间 08:00 ")
+                    return ["08:00"]
+            elif isinstance(v, list) and all(isinstance(i, str) for i in v):
+                if all(":" in i for i in v):
+                    logger.success(f"steam_subscribe_time 订阅时间 {v} 读取成功")
+                else:
+                    logger.exception(f"steam_subscribe_time 订阅时间 {v} 配置错误，将使用默认时间 08:00 ")
+                    return ["08:00"]
             else:
-                logger.exception(f"steam_subscribe_time 订阅时间 {v} 设置格式错误，将使用默认时间 08:00 ")
-                return "08:00"
+                logger.warning("steam_subscribe_time配置错误，将使用默认时间 08:00 ")
+                return ["08:00"]
         else:
-            logger.info("steam_tail_tone未配置，将使用默认时间 08:00 ")
+            logger.info("steam_subscribe_time未配置，将使用默认时间 08:00 ")
+            return ["08:00"]
         return v
     
 config_steam = get_plugin_config(Config)
