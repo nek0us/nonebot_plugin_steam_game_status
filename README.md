@@ -99,7 +99,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_area_game | 否 | false | bool/list | 识别其它区游戏 |
 | steam_link_r18_game | 否 | false | bool/list | 识别r18游戏 |
 | steam_tail_tone | 否 | "" | str | bot尾音 |
-| steam_subscribe_time | 否 | "08:00" | str | 喜加一订阅检索推送时间 |
+| steam_subscribe_time | 否 | ["08:00"] | str/List[str] | 喜加一订阅检索推送时间 |
 ---
 steam_tail_tone 示例
 ```.env
@@ -111,6 +111,8 @@ steam_subscribe_time 示例
 ```.env
 # .env.xxx
 steam_subscribe_time="20:30"
+# 或者多个时间
+steam_subscribe_time=["08:00","20:30"]
 ```
 
 steam_proxy 示例
@@ -230,6 +232,11 @@ pip install nonebot2[httpx]
 | steam喜加一 | 否 | 群聊 | 群员 |       主动获取喜加一资讯        |    
 | steam喜加一订阅 | 否 | 群聊 | 群员 |       开启本群喜加一推送        |    
 | steam喜加一退订 | 否 | 群聊 | 群员 |       关闭本群喜加一推送        |  
+| steam折扣订阅 | 否 | 群聊 | 群员 |       后加游戏id，开启本群折扣推送        |    
+| steam折扣退订 | 否 | 群聊 | 群员 |       后加游戏id，开启本群折扣推送        |    
+| steam墙 | 否 | 群聊 | 群员 |       后加用户id，展示steam游玩时长拼图        |  
+| steam失联群列表 | 否 | 群聊/私聊 | 超管 |       展示与bot失联群聊列表        |    
+| steam失联群清理 | 否 | 群聊/私聊 | 超管 |       从存储中删除失联群聊相关绑定订阅        |  
 | 任意steam商店链接 | 否 | 群聊/私聊 | 群员/好友 |       获取游戏信息        |  
 
 ### 默认屏蔽游戏/工具名
@@ -253,7 +260,16 @@ pip install nonebot2[httpx]
 
 
 ## 更新记录
-2024.09.18 0.2.6
+2025.11.30 0.3.0
+1. 添加steam游戏时长拼图获取
+2. 添加bot失联群管理
+3. 添加游戏折扣订阅
+4. 添加多时间订阅能力
+5. 添加steam域名反代
+6. 修复部分问题
+
+
+2025.09.18 0.2.6
 1. 兼容回 pydantic v1 版本
 2. 去除工具插件依赖，添加回 OneBot 依赖
 3. 修复新装插件处理文件bug
