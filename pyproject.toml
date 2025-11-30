@@ -15,5 +15,5 @@ Homepage = "https://github.com/nek0us/nonebot_plugin_steam_game_status"
 Repository = "https://github.com/nek0us/nonebot_plugin_steam_game_status"
 
 [build-system]
-requires = ["pdm-pep517>=0.12.0"]
-build-backend = "pdm.pep517.api"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
