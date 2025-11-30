@@ -351,42 +351,6 @@ steam_command_alc = Alconna(
     meta=CommandMeta(compact=True)
 )
 steam_cmd = on_alconna(steam_command_alc, priority=config_steam.steam_command_priority, rule=no_private_rule)        
-@steam_cmd.assign("打折订阅")
-async def steam_discounted_games_bind(target: MsgTarget,matcher: Matcher, game: Match[str]):
-    global game_discounted_subscribe
-    game_id = str(game.result)
-    if game_id not in game_discounted_subscribe:
-        game_discounted_subscribe[game_id] = []
-    if target.id in game_discounted_subscribe[game_id]:
-        await matcher.finish(f"已订阅过 {config_steam.steam_tail_tone}",reply_message=True)
-    try:
-        info = await get_discounted_games_info(target, game_id)
-    except Exception as e:
-        await matcher.finish(f"订阅出错了{config_steam.steam_tail_tone}, {e.args}")
-    
-    game_discounted_subscribe[game_id].append(target.id)
-    save_data()
-    if not info:
-        await matcher.finish(f"免费或未推出游戏不能订阅{config_steam.steam_tail_tone}",reply_message=True)
-    else:
-        if isinstance(info, str):
-            await matcher.finish(f"已订阅折扣提醒{config_steam.steam_tail_tone},\n{info}",reply_message=True)
-        else:
-            await matcher.finish(f"该游戏正在打折{config_steam.steam_tail_tone}",reply_message=True)
-
-
-@steam_cmd.assign("打折退订")
-async def steam_discounted_games_del(target: MsgTarget,matcher: Matcher, game: Match[str]):
-    global game_discounted_subscribe
-    game_id = str(game.result)
-    if game_id not in game_discounted_subscribe or target.id not in game_discounted_subscribe[game_id]:
-        await matcher.finish(f"未订阅过 {config_steam.steam_tail_tone}",reply_message=True)
-    game_discounted_subscribe[game_id].remove(target.id)
-    if not game_discounted_subscribe[game_id]:
-        del game_discounted_subscribe[game_id]
-    save_data()
-    await matcher.finish(f"已退订折扣提醒{config_steam.steam_tail_tone}",reply_message=True)
-
 
 @steam_cmd.assign("add")
 async def steam_bind_handle(target: MsgTarget,matcher: Matcher, id: Match[str]):
@@ -591,3 +555,38 @@ async def sbeam_subscribe():
     logger.info("steam定时尝试获取推送打折")
     await get_discounted_games_info()
     logger.info("steam定时尝试获取推送打折结束")
+
+@steam_cmd.assign("打折订阅")
+async def steam_discounted_games_bind(target: MsgTarget,matcher: Matcher, game: Match[str]):
+    global game_discounted_subscribe
+    game_id = str(game.result)
+    if game_id not in game_discounted_subscribe:
+        game_discounted_subscribe[game_id] = []
+    if target.id in game_discounted_subscribe[game_id]:
+        await matcher.finish(f"已订阅过 {config_steam.steam_tail_tone}",reply_message=True)
+    try:
+        info = await get_discounted_games_info(target, game_id)
+    except Exception as e:
+        await matcher.finish(f"订阅出错了{config_steam.steam_tail_tone}, {e.args}")
+    
+    game_discounted_subscribe[game_id].append(target.id)
+    save_data()
+    if not info:
+        await matcher.finish(f"免费或未推出游戏不能订阅{config_steam.steam_tail_tone}",reply_message=True)
+    else:
+        if isinstance(info, str):
+            await matcher.finish(f"已订阅折扣提醒{config_steam.steam_tail_tone},\n{info}",reply_message=True)
+        else:
+            await matcher.finish(f"该游戏正在打折{config_steam.steam_tail_tone}",reply_message=True)
+
+@steam_cmd.assign("打折退订")
+async def steam_discounted_games_del(target: MsgTarget,matcher: Matcher, game: Match[str]):
+    global game_discounted_subscribe
+    game_id = str(game.result)
+    if game_id not in game_discounted_subscribe or target.id not in game_discounted_subscribe[game_id]:
+        await matcher.finish(f"未订阅过 {config_steam.steam_tail_tone}",reply_message=True)
+    game_discounted_subscribe[game_id].remove(target.id)
+    if not game_discounted_subscribe[game_id]:
+        del game_discounted_subscribe[game_id]
+    save_data()
+    await matcher.finish(f"已退订折扣提醒{config_steam.steam_tail_tone}",reply_message=True)
