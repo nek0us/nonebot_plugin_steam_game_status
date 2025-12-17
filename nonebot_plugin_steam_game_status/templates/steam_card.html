@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <style>
+
+        body {
+            margin: 0;
+            padding: 35px;
+            background-color: transparent;
+            font-family: "Microsoft YaHei", "Arial", sans-serif;
+            width: fit-content;
+        }
+
+        /* 卡片 */
+        .steam-card {
+            display: flex;
+            align-items: center;
+            /* Steam 经典深色 */
+            background: linear-gradient(135deg, #1b2838 0%, #171a21 100%);
+            padding: 12px;
+            border-radius: 4px;
+            width: 400px; /* 固定宽度，可做适当修改 */
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            border: 1px solid #2a475e;
+            position: relative;
+            overflow: hidden;
+        }
+
+
+        .avatar-box {
+            position: relative;
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+
+        .avatar {
+            width: 74px;
+            height: 74px;
+            border-radius: 4px;
+            display: block;
+        }
+
+
+        .avatar-border {
+            position: absolute;
+            top: -3px; left: -3px; right: -3px; bottom: -3px;
+            border: 3px solid #90ba3c;
+            border-radius: 6px;
+            pointer-events: none;
+        }
+
+
+        .info-box {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            z-index: 2;
+            max-width: 340px;
+        }
+
+
+        .player-name {
+            font-size: 22px;
+            font-weight: bold;
+            color: #90ba3c;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+
+        .action-text {
+            font-size: 14px;
+            color: #c6d4df;
+            margin-bottom: 4px;
+        }
+
+
+        .game-name {
+            font-size: 18px;
+            color: #ffffff;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-shadow: 0 1px 2px black;
+        }
+
+        /* 背景装饰水印Steam效果 */
+        .bg-watermark {
+            position: absolute;
+            right: -20px;
+            bottom: -30px;
+            font-size: 140px;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.03); /* 调整的话改此透明度 */
+            transform: rotate(-10deg);
+            pointer-events: none;
+            user-select: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="steam-card">
+        <div class="bg-watermark">Steam</div>
+
+        <div class="avatar-box">
+            <img
+                src="{{ avatar_url }}"
+                onerror="this.onerror=null;this.src='data:image/svg+xml;charset=utf-8,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 100 100%22%3E%3Crect width%3D%22100%25%22 height%3D%22100%25%22 fill%3D%22%232a475e%22%2F%3E%3Ctext x%3D%2250%25%22 y%3D%2250%25%22 dominant-baseline%3D%22middle%22 text-anchor%3D%22middle%22 font-family%3D%22Microsoft YaHei%22 font-size%3D%2230%22 fill%3D%22%238f98a0%22%3E头像%3C%2Ftext%3E%3C%2Fsvg%3E';this.style.padding='0';this.style.objectFit='cover';"
+                class="avatar"
+                alt="avatar"
+            >
+            <div class="avatar-border"></div>
+        </div>
+
+        <div class="info-box">
+            <div class="player-name">{{ player_name }}</div>
+            <div class="action-text">{{ action_text }}</div>
+            <div class="game-name">{{ game_name }}</div>
+        </div>
+    </div>
+</body>
+</html>
