@@ -17,3 +17,8 @@ Repository = "https://github.com/nek0us/nonebot_plugin_steam_game_status"
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+
+[tool.pdm.build]
+includes = [
+    "nonebot_plugin_steam_game_status",
+]
