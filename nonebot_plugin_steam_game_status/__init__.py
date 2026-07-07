@@ -484,7 +484,7 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
     global steam_list, group_list, exclude_game
     if str(target.id) not in group_list:
         group_list[str(target.id)] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
-        exclude_game[str(target.id)] = exclude_game_default
+        exclude_game[str(target.id)] = list(exclude_game_default)
 
     if steam_id in group_list[str(target.id)]["user_list"]:
         await matcher.finish(f"已经绑定过了{config_steam.steam_tail_tone}")
@@ -577,7 +577,7 @@ async def steam_clude_handle(target: MsgTarget, arp: Arparma, matcher: Matcher, 
     game_name = str(game.result)
     if str(target.id) not in group_list:
         group_list[str(target.id)] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
-        exclude_game[str(target.id)] = exclude_game_default
+        exclude_game[str(target.id)] = list(exclude_game_default)
         exclude_game_file.write_text(json.dumps(exclude_game))
         new_file_group.write_text(json.dumps(group_list))
     if game_name == "":
@@ -599,7 +599,7 @@ async def steam_exclude_list_handle(target: MsgTarget):
     global group_list, exclude_game
     if str(target.id) not in group_list:
         group_list[str(target.id)] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
-        exclude_game[str(target.id)] = exclude_game_default
+        exclude_game[str(target.id)] = list(exclude_game_default)
         exclude_game_file.write_text(json.dumps(exclude_game))
         new_file_group.write_text(json.dumps(group_list))
 

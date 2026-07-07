@@ -65,13 +65,13 @@ if not old_dirpath.exists():
             else:
                 exclude_game_tmp = {}
                 for group_id in group_tmp:
-                    exclude_game_tmp[group_id] = exclude_game_default
+                    exclude_game_tmp[group_id] = list(exclude_game_default)
                 exclude_game_file.write_text(json.dumps(exclude_game_tmp))
         else:
             exclude_game_tmp = json.loads(exclude_game_file.read_text(encoding='utf8'))
             for group_id in group_tmp:
                 if group_id not in exclude_game_tmp:
-                    exclude_game_tmp[group_id] = exclude_game_default
+                    exclude_game_tmp[group_id] = list(exclude_game_default)
             exclude_game_file.write_text(json.dumps(exclude_game_tmp))
         
 

@@ -30,7 +30,7 @@ class GroupDataNew(GroupData3):
 
 def create_group_data(
         status: bool = True,
-        user_list: List[str] = [],
+        user_list: Optional[List[str]] = None,
         adapter: str = "OneBot V11",
         xijiayi: bool = False,
         image: bool = True,
@@ -39,7 +39,7 @@ def create_group_data(
     '''创建数据结构统一为函数调用'''
     return GroupDataNew(
         status=status,
-        user_list=user_list,
+        user_list=list(user_list) if user_list is not None else [],
         adapter=adapter,
         xijiayi=xijiayi,
         image=image,
