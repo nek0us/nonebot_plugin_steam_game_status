@@ -491,11 +491,9 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
             logger.debug(f"Steam 绑定出错，输入值：{steam_id}，错误：{e.args}")
             await matcher.finish(f"Steam ID格式错误{config_steam.steam_tail_tone}")
     global steam_list, group_list, exclude_game
-    if str(target.id) not in group_list:
-        group_list[str(target.id)] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
-        exclude_game[str(target.id)] = list(exclude_game_default)
+    group_id = ensure_group_data(target)
 
-    if steam_id in group_list[str(target.id)]["user_list"]:
+    if steam_id in group_list[group_id]["user_list"]:
         await matcher.finish(f"已经绑定过了{config_steam.steam_tail_tone}")
 
     steam_name: str = ""
@@ -527,7 +525,7 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
     # 更新缓存
     steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name)
 
-    group_list[str(target.id)]["user_list"].append(steam_id)
+    group_list[group_id]["user_list"].append(steam_id)
     save_data()
 
     # 渲染发送绑定成功
@@ -558,7 +556,7 @@ async def steam_del_handle(target: MsgTarget, matcher: Matcher, id: Match[str]):
     global group_list
 
     if str(target.id) not in group_list:
-        group_list[str(target.id)] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
+        ensure_group_data(target)
         await matcher.finish(f"本群不存在 Steam 绑定记录{config_steam.steam_tail_tone}")
 
     if steam_id not in group_list[str(target.id)]["user_list"]:
@@ -584,21 +582,21 @@ async def steam_clude_handle(target: MsgTarget, arp: Arparma, matcher: Matcher, 
     global group_list, exclude_game
     handle = next(iter(arp.components))
     game_name = str(game.result)
-    if str(target.id) not in group_list:
-        group_list[str(target.id)] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
-        exclude_game[str(target.id)] = list(exclude_game_default)
+    needs_save = str(target.id) not in group_list or str(target.id) not in exclude_game
+    group_id = ensure_group_data(target)
+    if needs_save:
         exclude_game_file.write_text(json.dumps(exclude_game))
         new_file_group.write_text(json.dumps(group_list))
     if game_name == "":
         await matcher.finish(f"请输入要{handle}的完整游戏名称{config_steam.steam_tail_tone}")
     elif handle == "屏蔽":
-        if game_name in exclude_game[str(target.id)]:
+        if game_name in exclude_game[group_id]:
             await matcher.finish(f"{game_name} 已经被屏蔽过了{config_steam.steam_tail_tone}")
-        exclude_game[str(target.id)].append(game_name)
+        exclude_game[group_id].append(game_name)
     elif handle == "恢复":
-        if game_name not in exclude_game[str(target.id)]:
+        if game_name not in exclude_game[group_id]:
             await matcher.finish(f"{game_name} 没有被屏蔽过{config_steam.steam_tail_tone}")
-        exclude_game[str(target.id)].remove(game_name)
+        exclude_game[group_id].remove(game_name)
     exclude_game_file.write_text(json.dumps(exclude_game))
     await matcher.finish(f"{handle}游戏 {game_name} 完成{config_steam.steam_tail_tone}")
 
@@ -606,9 +604,9 @@ async def steam_clude_handle(target: MsgTarget, arp: Arparma, matcher: Matcher, 
 @steam_cmd.assign("排除列表")
 async def steam_exclude_list_handle(target: MsgTarget):
     global group_list, exclude_game
-    if str(target.id) not in group_list:
-        group_list[str(target.id)] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
-        exclude_game[str(target.id)] = list(exclude_game_default)
+    needs_save = str(target.id) not in group_list or str(target.id) not in exclude_game
+    group_id = ensure_group_data(target)
+    if needs_save:
         exclude_game_file.write_text(json.dumps(exclude_game))
         new_file_group.write_text(json.dumps(group_list))
 
@@ -618,7 +616,7 @@ async def steam_exclude_list_handle(target: MsgTarget):
             name=str(index + 1),
             content=UniMessage.text(game_name)
         )
-        for index, game_name in enumerate(exclude_game[str(target.id)])
+        for index, game_name in enumerate(exclude_game[group_id])
     ]
     await UniMessage(Reference(nodes=nodes)).send()
 
@@ -647,10 +645,8 @@ async def steam_on_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"仅允许设置播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        if str(target.id) not in group_list:
-            group_list[str(target.id)] = create_group_data(
-                adapter=to_enum(target.adapter).value if target.adapter else "")
-        group_list[str(target.id)]["status"] = True if str(status.result) == "开启" else False
+        group_id = ensure_group_data(target)
+        group_list[group_id]["status"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
@@ -661,10 +657,8 @@ async def steam_image_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"仅允许设置图片播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        if str(target.id) not in group_list:
-            group_list[str(target.id)] = create_group_data(
-                adapter=to_enum(target.adapter).value if target.adapter else "")
-        group_list[str(target.id)]["image"] = True if str(status.result) == "开启" else False
+        group_id = ensure_group_data(target)
+        group_list[group_id]["image"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 图片播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
@@ -675,10 +669,8 @@ async def steam_stop_image_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"仅允许设置结束图片播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        if str(target.id) not in group_list:
-            group_list[str(target.id)] = create_group_data(
-                adapter=to_enum(target.adapter).value if target.adapter else "")
-        group_list[str(target.id)]["stop_image"] = True if str(status.result) == "开启" else False
+        group_id = ensure_group_data(target)
+        group_list[group_id]["stop_image"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 结束图片播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
