@@ -249,7 +249,7 @@ async def render_bind_card(avatar_url: str, player_name: str, steam_id: str) -> 
                 "steam_id": steam_id,
             },
             pages={
-                "viewport": {"width": 350, "height": 400},
+                "viewport": {"width": 342, "height": 330},
                 "base_url": f"file://{template_path}",
             },
             wait=1,  # 同132行注释
