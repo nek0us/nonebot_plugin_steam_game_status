@@ -598,25 +598,32 @@ async def now_steam_owned_games():
 
         old_games = owned_games[steam_id]
         new_appids = sorted(set(current_games) - set(old_games))
-        owned_games[steam_id] = current_games
 
         if not new_appids:
+            owned_games[steam_id] = current_games
             continue
 
         player_name = steam_list.get(steam_id, {}).get("nickname", steam_id)
         game_lines = [f"《{current_games[appid]}》" for appid in new_appids]
-        message = UniMessage(f"{player_name} 的 Steam 游戏库新增了：\n" + "\n".join(game_lines))
+        message_text = f"{player_name} 的 Steam 游戏库新增了：\n" + "\n".join(game_lines)
+        sent = False
 
         for group_id in group_ids:
             target, bot = await get_group_target_bot(group_id)
             if target:
                 try:
                     logger.info(f"群 {group_id} 发送 Steam 游戏库入库播报: {player_name} -> {new_appids}")
-                    await message.send(target=target, bot=bot)
+                    await UniMessage(message_text).send(target=target, bot=bot)
+                    sent = True
                 except Exception as e:
                     logger.warning(f"群 {group_id} 发送 Steam 游戏库入库播报失败: {e}")
             else:
                 await test_group_active(group_id)
+
+        if sent:
+            owned_games[steam_id] = current_games
+        else:
+            logger.warning(f"Steam 游戏库入库播报全部发送失败，保留旧基准等待下次重试，steam_id:{steam_id}")
 
     save_data()
     logger.info("steam游戏库入库检查任务完成")
