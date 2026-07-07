@@ -523,7 +523,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
         logger.debug(
             f"steam id:{steam_id} 查询状态失败,line: {exc_traceback.tb_lineno if exc_traceback else ''}，{e.args} \n{res.text if res else None}\n{a}\n{b}")
     finally:
-        if not isinstance(user_info, List):
+        if not isinstance(user_info, list):
             steam_list[steam_id] = user_info
 
 

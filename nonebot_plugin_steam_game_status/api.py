@@ -98,7 +98,7 @@ async def generate_image(html_content: str, width: int = 500) -> bytes:
 
 
 def get_steam_key() -> str:
-    if isinstance(config_steam.steam_web_key, List):
+    if isinstance(config_steam.steam_web_key, list):
         return random.choice(config_steam.steam_web_key)
     elif isinstance(config_steam.steam_web_key, str):
         return config_steam.steam_web_key
@@ -211,7 +211,7 @@ async def gameid_to_price(game_id: str,game_data: Dict,location: str = "CN") -> 
 
 def get_isthereanydeal_key() -> str:
     if config_steam.steam_isthereanydeal_key:
-        if isinstance(config_steam.steam_isthereanydeal_key, List):
+        if isinstance(config_steam.steam_isthereanydeal_key, list):
             return random.choice(config_steam.steam_isthereanydeal_key)
         elif isinstance(config_steam.steam_isthereanydeal_key, str):
             return config_steam.steam_isthereanydeal_key
