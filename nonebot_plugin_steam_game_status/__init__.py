@@ -127,7 +127,7 @@ async def render_steam_card(avatar_url: str, player_name: str, game_name: str, a
                 "game_name": game_name,
             },
             pages={
-                "viewport": {"width": 500, "height": 150},
+                "viewport": {"width": 426, "height": 100},
                 "base_url": f"file://{template_path}",
             },
             wait=1,  # 等待1秒确保图片加载？可以核实一下有必要没
