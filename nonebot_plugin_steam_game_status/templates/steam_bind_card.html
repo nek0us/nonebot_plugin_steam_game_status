@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            background-color: transparent;
+            font-family: "Microsoft YaHei", "Arial", sans-serif;
+            width: fit-content;
+        }
+
+        .bind-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* 竖向卡片，背景色稍亮一些 */
+            background: linear-gradient(180deg, #171a21 0%, #2a475e 100%);
+            width: 300px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+            border: 1px solid #66c0f4; /* Steam 蓝色边框表示选中/绑定 */
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 顶部标题 */
+        .title {
+            font-size: 18px;
+            color: #66c0f4;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-bottom: 2px solid #66c0f4;
+            padding-bottom: 5px;
+        }
+
+        /* 头像区域 */
+        .avatar-box {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%; /* 圆形头像 */
+            border: 4px solid #fff;
+            box-shadow: 0 0 15px rgba(102, 192, 244, 0.4);
+            display: block;
+        }
+
+        /* 玩家名字 */
+        .player-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ffffff;
+            margin-bottom: 5px;
+            text-align: center;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Steam ID */
+        .steam-id {
+            font-size: 14px;
+            color: #c6d4df;
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-family: monospace;
+        }
+
+        /* 底部提示 */
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #8f98a0;
+        }
+
+        /* 背景装饰 */
+        .bg-icon {
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            font-size: 150px;
+            color: rgba(255, 255, 255, 0.03);
+            pointer-events: none;
+            z-index: 0;
+            transform: rotate(25deg);
+        }
+    </style>
+</head>
+<body>
+    <div class="bind-card">
+        <div class="bg-icon">#</div>
+        <div class="title">绑定成功</div>
+
+        <div class="avatar-box">
+            <img
+                src="{{ avatar_url }}"
+                onerror="this.onerror=null;this.src='data:image/svg+xml;charset=utf-8,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 100 100%22%3E%3Crect width%3D%22100%25%22 height%3D%22100%25%22 fill%3D%22%232a475e%22%2F%3E%3Ctext x%3D%2250%25%22 y%3D%2250%25%22 dominant-baseline%3D%22middle%22 text-anchor%3D%22middle%22 font-family%3D%22Microsoft YaHei%22 font-size%3D%2230%22 fill%3D%22%238f98a0%22%3E头像%3C%2Ftext%3E%3C%2Fsvg%3E';this.style.padding='0';this.style.objectFit='cover';"
+                class="avatar"
+            >
+        </div>
+
+        <div class="player-name">{{ player_name }}</div>
+        <div class="steam-id">ID: {{ steam_id }}</div>
+
+        <div class="footer">现在可以追踪你的游戏状态了</div>
+    </div>
+</body>
+</html>
