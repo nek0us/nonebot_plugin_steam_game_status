@@ -88,6 +88,7 @@ __plugin_meta__ = PluginMetadata(
             steam播报关闭/steam播报停止 
             steam图片播报开启/steam图片播报关闭
             steam结束图片播报开启/steam结束图片播报关闭
+                默认开始/切换游戏使用图片播报，结束游戏使用文字播报。
             steam喜加一
             steam喜加一订阅
             steam喜加一退订
