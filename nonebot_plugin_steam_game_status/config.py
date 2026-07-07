@@ -27,6 +27,7 @@ class Config(BaseModel):
     steam_owned_game_interval: int = 60
     steam_dynamic_avatar_card: bool = False
     steam_dynamic_card_cache: bool = True
+    steam_dynamic_card_frame_duration_ms: int = 120
     
     @validator("steam_isthereanydeal_key")
     def check_isthereanydeal_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
@@ -162,6 +163,12 @@ class Config(BaseModel):
         else:
             logger.info("steam_dynamic_card_cache 动态卡片缓存 已关闭")
         return v
+
+    @validator("steam_dynamic_card_frame_duration_ms")
+    def check_dynamic_card_frame_duration_ms(cls, v: int) -> int:
+        if v >= 20:
+            return v
+        raise ValueError("steam_dynamic_card_frame_duration_ms 必须为大于等于20的整数")
     
 config_steam = get_plugin_config(Config)
 bot_name = list(get_driver().config.nickname)

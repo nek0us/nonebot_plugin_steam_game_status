@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 
 STEAM_CARD_ANIMATION_FRAME_COUNT = 12
-STEAM_CARD_ANIMATION_FRAME_DURATION_MS = 80
+STEAM_CARD_ANIMATION_FRAME_DURATION_MS = 120
 
 
 def is_animated_image_url(url: str) -> bool:

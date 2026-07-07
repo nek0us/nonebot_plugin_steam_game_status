@@ -22,7 +22,6 @@ from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 from .utils import http_client, driver, HTTPClientSession, to_enum, playwright_context
 from .card import (
     STEAM_CARD_ANIMATION_FRAME_COUNT,
-    STEAM_CARD_ANIMATION_FRAME_DURATION_MS,
     build_steam_card_cache_key,
     is_animated_image_url,
     render_steam_card_template,
@@ -176,6 +175,7 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             action_text=action_text,
             game_name=game_name,
             template_digest=template_digest,
+            frame_duration_ms=config_steam.steam_dynamic_card_frame_duration_ms,
         )
         cache_file = dynamic_card_cache_dir / f"{cache_key}.gif"
         if config_steam.steam_dynamic_card_cache and cache_file.exists():
@@ -203,7 +203,7 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             for _ in range(STEAM_CARD_ANIMATION_FRAME_COUNT):
                 frame_bytes = await card.screenshot(type="png", omit_background=True)
                 frames.append(PILImage.open(io.BytesIO(frame_bytes)).convert("RGBA"))
-                await page.wait_for_timeout(STEAM_CARD_ANIMATION_FRAME_DURATION_MS)
+                await page.wait_for_timeout(config_steam.steam_dynamic_card_frame_duration_ms)
 
         if not frames:
             return None
@@ -214,7 +214,7 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             format="GIF",
             save_all=True,
             append_images=frames[1:],
-            duration=STEAM_CARD_ANIMATION_FRAME_DURATION_MS,
+            duration=config_steam.steam_dynamic_card_frame_duration_ms,
             loop=0,
             disposal=2,
         )
