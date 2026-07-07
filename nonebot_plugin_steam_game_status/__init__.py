@@ -643,7 +643,6 @@ async def steam_del_handle(target: MsgTarget, matcher: Matcher, id: Match[str]):
     global group_list
 
     if str(target.id) not in group_list:
-        ensure_group_data(target)
         await matcher.finish(f"本群不存在 Steam 绑定记录{config_steam.steam_tail_tone}")
 
     if steam_id not in group_list[str(target.id)]["user_list"]:
