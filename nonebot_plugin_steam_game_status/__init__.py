@@ -39,6 +39,7 @@ from .api import (
     get_steam_playtime,
     get_discounted_games_info,
     get_owned_games,
+    get_animated_avatar_url,
 )
 from .source import (
     new_file_group,
@@ -173,6 +174,22 @@ async def render_bind_card(avatar_url: str, player_name: str, steam_id: str) -> 
     except Exception as e:
         logger.error(f"渲染 Steam 绑定卡片失败: {e}")
         return None
+
+
+async def resolve_avatar_url(steam_id: str, fallback_avatar_url: str) -> str:
+    if not config_steam.steam_dynamic_avatar_card:
+        return fallback_avatar_url
+
+    try:
+        animated_avatar_url = await get_animated_avatar_url(steam_id)
+    except Exception as e:
+        logger.debug(f"Steam 动态头像获取异常，steam_id:{steam_id}，使用静态头像：{e.args}")
+        return fallback_avatar_url
+
+    if animated_avatar_url:
+        logger.debug(f"Steam 动态头像已获取，steam_id:{steam_id}")
+        return animated_avatar_url
+    return fallback_avatar_url
 
 
 
@@ -340,7 +357,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
 
             if should_notify:
                 card_image_bytes = None
-                avatar_url = res_info.get("avatarfull", "")
+                avatar_url = await resolve_avatar_url(steam_id, res_info.get("avatarfull", ""))
                 image_enabled_group_ids = [
                     group_id
                     for group_id in steam_id_to_groups[steam_id]
@@ -584,7 +601,7 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
                 await matcher.finish(f"{steam_id} 绑定失败，查无此人，请检查输入的id{config_steam.steam_tail_tone}")
 
             steam_name = players[0]['personaname']
-            avatar_url = players[0].get('avatarfull', '')
+            avatar_url = await resolve_avatar_url(steam_id, players[0].get('avatarfull', ''))
 
     except MatcherException:
         raise

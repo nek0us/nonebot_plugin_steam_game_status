@@ -12,6 +12,7 @@ from nonebot_plugin_alconna.uniseg import UniMessage, CustomNode, Reference, Msg
 from bs4 import BeautifulSoup, Tag
 from typing import Dict, List, Optional, Tuple
 
+from .avatar import resolve_animated_avatar_url
 from .config import bot_name, get_steam_api_domain, get_steam_store_domain
 from .model import SafeResponse, ModTarget
 from .utils import config_steam, http_client, get_target, playwright_context, HTTPClientSession
@@ -103,6 +104,25 @@ def get_steam_key() -> str:
         return config_steam.steam_web_key
     else:
         return str(config_steam.steam_web_key)
+
+async def get_animated_avatar_url(steam_id: str) -> Optional[str]:
+    url = (
+        f"https://{get_steam_api_domain()}/IPlayerService/GetProfileItemsEquipped/v1/"
+        f"?steamid={steam_id}"
+        "&format=json"
+    )
+    async with http_client() as client:
+        res = SafeResponse(await client.request(Request("GET", url, timeout=30)))
+    if res.status_code != 200:
+        logger.debug(f"Steam 动态头像获取失败，steam_id:{steam_id}，状态码:{res.status_code}")
+        return None
+
+    animated_avatar_url = resolve_animated_avatar_url(res.json())
+    if not animated_avatar_url:
+        logger.debug(f"Steam 用户未装备动态头像，steam_id:{steam_id}")
+        return None
+    return animated_avatar_url
+
 
 async def get_owned_games(steam_id: str) -> Optional[Dict[str, str]]:
     url = (

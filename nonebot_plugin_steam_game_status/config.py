@@ -151,7 +151,7 @@ class Config(BaseModel):
     @validator("steam_dynamic_avatar_card")
     def check_dynamic_avatar_card(cls, v: bool) -> bool:
         if v:
-            logger.info("steam_dynamic_avatar_card 已开启，但当前版本仍使用静态卡片渲染")
+            logger.info("steam_dynamic_avatar_card 已开启，将尝试使用 Steam 动态头像资源，卡片输出仍为静态图片")
         return v
     
 config_steam = get_plugin_config(Config)
