@@ -711,20 +711,18 @@ async def steam_discounted_games_bind(target: MsgTarget, matcher: Matcher, game:
     global game_discounted_subscribe
     group_id = ensure_group_data(target)
     game_id = str(game.result)
-    if game_id not in game_discounted_subscribe:
-        game_discounted_subscribe[game_id] = []
-    if group_id in game_discounted_subscribe[game_id]:
+    if group_id in game_discounted_subscribe.get(game_id, []):
         await matcher.finish(f"已订阅过 {config_steam.steam_tail_tone}", reply_message=True)
     try:
         info = await get_discounted_games_info(target, game_id)
     except Exception as e:
         await matcher.finish(f"订阅出错了{config_steam.steam_tail_tone}, {e.args}")
 
-    game_discounted_subscribe[game_id].append(group_id)
-    save_data()
     if not info:
         await matcher.finish(f"免费或未推出游戏不能订阅{config_steam.steam_tail_tone}", reply_message=True)
     else:
+        game_discounted_subscribe.setdefault(game_id, []).append(group_id)
+        save_data()
         if isinstance(info, str):
             await matcher.finish(f"已订阅折扣提醒{config_steam.steam_tail_tone},\n{info}", reply_message=True)
         else:
