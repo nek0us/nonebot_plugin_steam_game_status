@@ -656,6 +656,27 @@ def ensure_group_data(target: MsgTarget) -> str:
     return group_id
 
 
+async def initialize_owned_games_baseline(steam_ids: List[str]) -> tuple[int, int]:
+    created = 0
+    failed = 0
+    for steam_id in set(steam_ids):
+        if steam_id in owned_games:
+            continue
+        try:
+            current_games = await get_owned_games(steam_id)
+        except Exception as e:
+            failed += 1
+            logger.warning(f"steam游戏库基准建立异常，steam_id:{steam_id}：{e.args}")
+            continue
+        if current_games is None:
+            failed += 1
+            continue
+        owned_games[steam_id] = current_games
+        created += 1
+        logger.info(f"steam游戏库入库播报建立基准，steam_id:{steam_id}，游戏数：{len(current_games)}")
+    return created, failed
+
+
 @steam_cmd.assign("add")
 async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str]):
     steam_id = str(id.result)
@@ -703,6 +724,8 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
     steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name)
 
     group_list[group_id]["user_list"].append(steam_id)
+    if group_list[group_id].get("owned_game", False):
+        await initialize_owned_games_baseline([steam_id])
     save_data()
 
     # 渲染发送绑定成功
@@ -858,9 +881,17 @@ async def steam_owned_game_handle(target: MsgTarget, status: Match[str]):
     else:
         global group_list
         group_id = ensure_group_data(target)
-        group_list[group_id]["owned_game"] = True if str(status.result) == "开启" else False
+        owned_game_enabled = str(status.result) == "开启"
+        group_list[group_id]["owned_game"] = owned_game_enabled
+        created = 0
+        failed = 0
+        if owned_game_enabled:
+            created, failed = await initialize_owned_games_baseline(group_list[group_id]["user_list"])
         save_data()
-        await UniMessage(f"Steam 入库播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
+        baseline_text = f"，已建立 {created} 个游戏库基准"
+        if failed:
+            baseline_text += f"，{failed} 个失败"
+        await UniMessage(f"Steam 入库播报已{str(status.result)}{baseline_text if owned_game_enabled else ''}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 
 @steam_cmd.assign("喜加一")
