@@ -194,8 +194,16 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
         async with playwright_context() as pc:
             page = await pc.new_page()
             await page.set_viewport_size({"width": 426, "height": 100})
-            await page.set_content(html_content, wait_until="networkidle")
-            await page.wait_for_selector(".steam-card", state="visible", timeout=10000)
+            await page.set_content(
+                html_content,
+                wait_until="networkidle",
+                timeout=config_steam.steam_dynamic_card_timeout_ms,
+            )
+            await page.wait_for_selector(
+                ".steam-card",
+                state="visible",
+                timeout=config_steam.steam_dynamic_card_timeout_ms,
+            )
             await page.wait_for_timeout(200)
             card = await page.query_selector(".steam-card")
             if not card:
