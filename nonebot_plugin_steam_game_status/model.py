@@ -26,6 +26,7 @@ class GroupData3(GroupData2):
     
 class GroupDataNew(GroupData3):
     image: bool
+    stop_image: bool
 
 def create_group_data(
         status: bool = True,
@@ -33,6 +34,7 @@ def create_group_data(
         adapter: str = "OneBot V11",
         xijiayi: bool = False,
         image: bool = True,
+        stop_image: bool = False,
         ) -> GroupDataNew:
     '''创建数据结构统一为函数调用'''
     return GroupDataNew(
@@ -41,6 +43,7 @@ def create_group_data(
         adapter=adapter,
         xijiayi=xijiayi,
         image=image,
+        stop_image=stop_image,
     )
 
 class UserData(TypedDict):

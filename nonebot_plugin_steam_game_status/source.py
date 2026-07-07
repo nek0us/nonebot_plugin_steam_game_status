@@ -168,10 +168,29 @@ if value_26_07_07:
                 user_list=steam_group_26_07_07[group_id]["user_list"],
                 adapter=steam_group_26_07_07[group_id]["adapter"],
                 xijiayi=steam_group_26_07_07[group_id]["xijiayi"],
-                image=True
+                image=True,
+                stop_image=False
             )
         new_file_group.write_text(json.dumps(steam_group_dict_26_07_07))
         logger.success("steam 0.3.6 26.07.07 图片播报开关数据更新成功")
+
+# 26.07.07 结束游戏图片播报开关适配
+steam_group_stop_image_26_07_07: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
+value_stop_image_26_07_07 = next(iter(steam_group_stop_image_26_07_07.values()), None)
+if value_stop_image_26_07_07:
+    if "stop_image" not in value_stop_image_26_07_07:
+        steam_group_stop_image_dict_26_07_07 = {}
+        for group_id in steam_group_stop_image_26_07_07:
+            steam_group_stop_image_dict_26_07_07[group_id] = GroupDataNew(
+                status=steam_group_stop_image_26_07_07[group_id]["status"],
+                user_list=steam_group_stop_image_26_07_07[group_id]["user_list"],
+                adapter=steam_group_stop_image_26_07_07[group_id]["adapter"],
+                xijiayi=steam_group_stop_image_26_07_07[group_id]["xijiayi"],
+                image=steam_group_stop_image_26_07_07[group_id]["image"],
+                stop_image=False
+            )
+        new_file_group.write_text(json.dumps(steam_group_stop_image_dict_26_07_07))
+        logger.success("steam 0.3.6 26.07.07 结束游戏图片播报开关数据更新成功")
 
 # 25.11.28 低价订阅适配
 if not game_discounted_cache_file.exists():
