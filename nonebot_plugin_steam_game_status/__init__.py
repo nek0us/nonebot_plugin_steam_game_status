@@ -470,6 +470,15 @@ steam_command_alc = Alconna(
 steam_cmd = on_alconna(steam_command_alc, priority=config_steam.steam_command_priority, rule=no_private_rule)
 
 
+def ensure_group_data(target: MsgTarget) -> str:
+    group_id = str(target.id)
+    if group_id not in group_list:
+        group_list[group_id] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
+    if group_id not in exclude_game:
+        exclude_game[group_id] = list(exclude_game_default)
+    return group_id
+
+
 @steam_cmd.assign("add")
 async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str]):
     steam_id = str(id.result)
@@ -677,7 +686,8 @@ async def steam_stop_image_handle(target: MsgTarget, status: Match[str]):
 @steam_cmd.assign("喜加一")
 async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[str]):
     if action.result:
-        group_list[target.id]["xijiayi"] = True if str(action.result) == "订阅" else False
+        group_id = ensure_group_data(target)
+        group_list[group_id]["xijiayi"] = True if str(action.result) == "订阅" else False
         save_data()
         await matcher.finish(f"steam 喜加一 已{str(action.result)}{config_steam.steam_tail_tone}")
     res = await get_free_games_info(target)
@@ -699,17 +709,18 @@ async def steam_wall(matcher: Matcher, user: Match[str]):
 @steam_cmd.assign("打折订阅")
 async def steam_discounted_games_bind(target: MsgTarget, matcher: Matcher, game: Match[str]):
     global game_discounted_subscribe
+    group_id = ensure_group_data(target)
     game_id = str(game.result)
     if game_id not in game_discounted_subscribe:
         game_discounted_subscribe[game_id] = []
-    if target.id in game_discounted_subscribe[game_id]:
+    if group_id in game_discounted_subscribe[game_id]:
         await matcher.finish(f"已订阅过 {config_steam.steam_tail_tone}", reply_message=True)
     try:
         info = await get_discounted_games_info(target, game_id)
     except Exception as e:
         await matcher.finish(f"订阅出错了{config_steam.steam_tail_tone}, {e.args}")
 
-    game_discounted_subscribe[game_id].append(target.id)
+    game_discounted_subscribe[game_id].append(group_id)
     save_data()
     if not info:
         await matcher.finish(f"免费或未推出游戏不能订阅{config_steam.steam_tail_tone}", reply_message=True)
@@ -723,10 +734,11 @@ async def steam_discounted_games_bind(target: MsgTarget, matcher: Matcher, game:
 @steam_cmd.assign("打折退订")
 async def steam_discounted_games_del(target: MsgTarget, matcher: Matcher, game: Match[str]):
     global game_discounted_subscribe
+    group_id = str(target.id)
     game_id = str(game.result)
-    if game_id not in game_discounted_subscribe or target.id not in game_discounted_subscribe[game_id]:
+    if game_id not in game_discounted_subscribe or group_id not in game_discounted_subscribe[game_id]:
         await matcher.finish(f"未订阅过 {config_steam.steam_tail_tone}", reply_message=True)
-    game_discounted_subscribe[game_id].remove(target.id)
+    game_discounted_subscribe[game_id].remove(group_id)
     if not game_discounted_subscribe[game_id]:
         del game_discounted_subscribe[game_id]
         if game_id in game_discounted_cache:
