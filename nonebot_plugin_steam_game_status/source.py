@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, List
 from nonebot import require,logger
-from .model import GroupData, GroupData2, GroupData3, UserData
+from .model import GroupData, GroupData2, GroupData3, GroupDataNew, UserData
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as store  # noqa: E402
 
@@ -156,13 +156,49 @@ if value_25_09_08:
 if not game_free_cache_file.exists():
     game_free_cache_file.write_text("[]")
 
+# 26.07.07 图片播报开关适配
+steam_group_26_07_07: Dict[str, GroupData3] = json.loads(new_file_group.read_text("utf8"))
+value_26_07_07 = next(iter(steam_group_26_07_07.values()), None)
+if value_26_07_07:
+    if "image" not in value_26_07_07:
+        steam_group_dict_26_07_07 = {}
+        for group_id in steam_group_26_07_07:
+            steam_group_dict_26_07_07[group_id] = GroupDataNew(
+                status=steam_group_26_07_07[group_id]["status"],
+                user_list=steam_group_26_07_07[group_id]["user_list"],
+                adapter=steam_group_26_07_07[group_id]["adapter"],
+                xijiayi=steam_group_26_07_07[group_id]["xijiayi"],
+                image=True,
+                stop_image=False
+            )
+        new_file_group.write_text(json.dumps(steam_group_dict_26_07_07))
+        logger.success("steam 0.3.6 26.07.07 图片播报开关数据更新成功")
+
+# 26.07.07 结束游戏图片播报开关适配
+steam_group_stop_image_26_07_07: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
+value_stop_image_26_07_07 = next(iter(steam_group_stop_image_26_07_07.values()), None)
+if value_stop_image_26_07_07:
+    if "stop_image" not in value_stop_image_26_07_07:
+        steam_group_stop_image_dict_26_07_07 = {}
+        for group_id in steam_group_stop_image_26_07_07:
+            steam_group_stop_image_dict_26_07_07[group_id] = GroupDataNew(
+                status=steam_group_stop_image_26_07_07[group_id]["status"],
+                user_list=steam_group_stop_image_26_07_07[group_id]["user_list"],
+                adapter=steam_group_stop_image_26_07_07[group_id]["adapter"],
+                xijiayi=steam_group_stop_image_26_07_07[group_id]["xijiayi"],
+                image=steam_group_stop_image_26_07_07[group_id]["image"],
+                stop_image=False
+            )
+        new_file_group.write_text(json.dumps(steam_group_stop_image_dict_26_07_07))
+        logger.success("steam 0.3.6 26.07.07 结束游戏图片播报开关数据更新成功")
+
 # 25.11.28 低价订阅适配
 if not game_discounted_cache_file.exists():
     game_discounted_cache_file.write_text("[]")
 if not game_discounted_subscribe_file.exists():
     game_discounted_subscribe_file.write_text("{}")
 
-group_list: Dict[str, GroupData3] = json.loads(new_file_group.read_text("utf8"))  
+group_list: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
 steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8")) 
 gameid2name = json.loads(game_cache_file.read_text("utf8"))
 exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf8"))
