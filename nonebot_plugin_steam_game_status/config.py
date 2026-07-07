@@ -24,6 +24,7 @@ class Config(BaseModel):
     steam_link_r18_game: Union[bool, List[str]] = False
     steam_tail_tone: str = ""
     steam_subscribe_time: Union[str, List[str]] = ["08:00"]
+    steam_dynamic_avatar_card: bool = False
     
     @validator("steam_isthereanydeal_key")
     def check_isthereanydeal_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
@@ -138,6 +139,12 @@ class Config(BaseModel):
         else:
             logger.info("steam_subscribe_time未配置，将使用默认时间 08:00 ")
             return ["08:00"]
+        return v
+
+    @validator("steam_dynamic_avatar_card")
+    def check_dynamic_avatar_card(cls, v: bool) -> bool:
+        if v:
+            logger.info("steam_dynamic_avatar_card 已开启，但当前版本仍使用静态卡片渲染")
         return v
     
 config_steam = get_plugin_config(Config)

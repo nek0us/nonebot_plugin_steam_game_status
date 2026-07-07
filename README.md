@@ -100,6 +100,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_link_r18_game | 否 | false | bool/list | 识别r18游戏 |
 | steam_tail_tone | 否 | "" | str | bot尾音 |
 | steam_subscribe_time | 否 | ["08:00"] | str/List[str] | 喜加一订阅检索推送时间 |
+| steam_dynamic_avatar_card | 否 | false | bool | 动态头像卡片预留开关，当前版本仍使用静态卡片渲染 |
 ---
 steam_tail_tone 示例
 ```.env
