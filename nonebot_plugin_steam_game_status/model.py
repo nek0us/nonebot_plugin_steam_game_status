@@ -27,6 +27,7 @@ class GroupData3(GroupData2):
 class GroupDataNew(GroupData3):
     image: bool
     stop_image: bool
+    owned_game: bool
 
 def create_group_data(
         status: bool = True,
@@ -35,6 +36,7 @@ def create_group_data(
         xijiayi: bool = False,
         image: bool = True,
         stop_image: bool = False,
+        owned_game: bool = False,
         ) -> GroupDataNew:
     '''创建数据结构统一为函数调用'''
     return GroupDataNew(
@@ -44,6 +46,7 @@ def create_group_data(
         xijiayi=xijiayi,
         image=image,
         stop_image=stop_image,
+        owned_game=owned_game,
     )
 
 class UserData(TypedDict):

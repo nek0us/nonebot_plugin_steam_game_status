@@ -38,6 +38,7 @@ from .api import (
     test_group_active,
     get_steam_playtime,
     get_discounted_games_info,
+    get_owned_games,
 )
 from .source import (
     new_file_group,
@@ -48,6 +49,7 @@ from .source import (
     group_list,
     exclude_game,
     game_discounted_cache,
+    owned_games,
 )
 
 require("nonebot_plugin_alconna")
@@ -89,6 +91,8 @@ __plugin_meta__ = PluginMetadata(
             steam图片播报开启/steam图片播报关闭
             steam结束图片播报开启/steam结束图片播报关闭
                 默认开始/切换游戏使用图片播报，结束游戏使用文字播报。
+            steam入库播报开启/steam入库播报关闭
+                默认关闭。每小时检查一次公开游戏库，只播报新增游戏。
             steam喜加一
             steam喜加一订阅
             steam喜加一退订
@@ -445,6 +449,66 @@ async def now_steam():
                 logger.debug("steam finally保存完成")
 
 
+@scheduler.scheduled_job("interval", hours=1, id="steam_owned_games", misfire_grace_time=300)
+async def now_steam_owned_games():
+    if not config_steam.steam_web_key:
+        return
+
+    global owned_games
+    steam_id_to_groups: Dict[str, List[str]] = {}
+    for group_id, group_data in group_list.items():
+        if group_data.get("status") and group_data.get("owned_game", False):
+            for steam_id in group_data["user_list"]:
+                if steam_id not in steam_id_to_groups:
+                    steam_id_to_groups[steam_id] = []
+                steam_id_to_groups[steam_id].append(group_id)
+
+    if not steam_id_to_groups:
+        logger.debug("steam游戏库入库播报未开启，跳过本次检查")
+        return
+
+    logger.info(f"steam开始检查游戏库入库变更，用户数：{len(steam_id_to_groups)}")
+    for steam_id, group_ids in steam_id_to_groups.items():
+        try:
+            current_games = await get_owned_games(steam_id)
+        except Exception as e:
+            logger.warning(f"steam游戏库获取异常，steam_id:{steam_id}，跳过本次更新：{e.args}")
+            continue
+
+        if current_games is None:
+            continue
+
+        if steam_id not in owned_games:
+            owned_games[steam_id] = current_games
+            logger.info(f"steam游戏库入库播报建立基准，steam_id:{steam_id}，游戏数：{len(current_games)}")
+            continue
+
+        old_games = owned_games[steam_id]
+        new_appids = sorted(set(current_games) - set(old_games))
+        owned_games[steam_id] = current_games
+
+        if not new_appids:
+            continue
+
+        player_name = steam_list.get(steam_id, {}).get("nickname", steam_id)
+        game_lines = [f"《{current_games[appid]}》" for appid in new_appids]
+        message = UniMessage(f"{player_name} 的 Steam 游戏库新增了：\n" + "\n".join(game_lines))
+
+        for group_id in group_ids:
+            target, bot = await get_group_target_bot(group_id)
+            if target:
+                try:
+                    logger.info(f"群 {group_id} 发送 Steam 游戏库入库播报: {player_name} -> {new_appids}")
+                    await message.send(target=target, bot=bot)
+                except Exception as e:
+                    logger.warning(f"群 {group_id} 发送 Steam 游戏库入库播报失败: {e}")
+            else:
+                await test_group_active(group_id)
+
+    save_data()
+    logger.info("steam游戏库入库检查任务完成")
+
+
 steam_command_alc = Alconna(
     "steam",
     Option("add", Args["id", str], alias=["绑定", "添加", ".add"], separators="", compact=True),
@@ -460,6 +524,7 @@ steam_command_alc = Alconna(
     Option("播报", Args["status", str], separators="", compact=True),
     Option("图片播报", Args["status", str], separators="", compact=True),
     Option("结束图片播报", Args["status", str], separators="", compact=True),
+    Option("入库播报", Args["status", str], alias=["游戏库播报"], separators="", compact=True),
     Option("墙", Args["user", str], separators="", compact=True),
     Option("喜加一", Args["action", Optional[Literal["订阅", "退订"]]], separators="", compact=True),
     Option("失联群列表", separators="", compact=True),
@@ -673,6 +738,18 @@ async def steam_stop_image_handle(target: MsgTarget, status: Match[str]):
         group_list[group_id]["stop_image"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 结束图片播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
+
+
+@steam_cmd.assign("入库播报")
+async def steam_owned_game_handle(target: MsgTarget, status: Match[str]):
+    if str(status.result) not in ("开启", "关闭"):
+        await UniMessage(f"仅允许设置入库播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
+    else:
+        global group_list
+        group_id = ensure_group_data(target)
+        group_list[group_id]["owned_game"] = True if str(status.result) == "开启" else False
+        save_data()
+        await UniMessage(f"Steam 入库播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 
 @steam_cmd.assign("喜加一")

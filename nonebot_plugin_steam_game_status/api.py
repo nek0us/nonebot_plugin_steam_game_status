@@ -12,7 +12,7 @@ from nonebot_plugin_alconna.uniseg import UniMessage, CustomNode, Reference, Msg
 from bs4 import BeautifulSoup, Tag
 from typing import Dict, List, Optional, Tuple
 
-from .config import bot_name, get_steam_store_domain
+from .config import bot_name, get_steam_api_domain, get_steam_store_domain
 from .model import SafeResponse, ModTarget
 from .utils import config_steam, http_client, get_target, playwright_context, HTTPClientSession
 from .source import (
@@ -31,6 +31,8 @@ from .source import (
     game_discounted_cache_file,
     game_discounted_subscribe,
     game_discounted_subscribe_file,
+    owned_games,
+    owned_games_file,
     inactive_groups,
     inactive_groups_file,
     )
@@ -101,6 +103,33 @@ def get_steam_key() -> str:
         return config_steam.steam_web_key
     else:
         return str(config_steam.steam_web_key)
+
+async def get_owned_games(steam_id: str) -> Optional[Dict[str, str]]:
+    url = (
+        f"https://{get_steam_api_domain()}/IPlayerService/GetOwnedGames/v0001/"
+        f"?key={get_steam_key()}"
+        f"&steamid={steam_id}"
+        "&include_appinfo=1"
+        "&include_played_free_games=1"
+        "&format=json"
+    )
+    async with http_client() as client:
+        res = SafeResponse(await client.request(Request("GET", url, timeout=30)))
+    if res.status_code != 200:
+        logger.warning(f"Steam 游戏库获取失败，steam_id:{steam_id}，状态码:{res.status_code}")
+        return None
+
+    data = res.json().get("response", {})
+    games = data.get("games")
+    if not isinstance(games, list):
+        logger.info(f"Steam 游戏库不可见或为空，steam_id:{steam_id}")
+        return None
+
+    return {
+        str(game["appid"]): str(game.get("name") or game["appid"])
+        for game in games
+        if "appid" in game
+    }
 
 
 async def gameid_to_name(gameid: str,origin_name: Optional[str] = None) -> str:
@@ -195,13 +224,14 @@ async def get_history_price(game_uuid: str, client: HTTPClientSession, location:
         raise ConnectionError(f"gameid_to_uuid 获取失败，game_uuid_id:{game_uuid}，res code:{res.status_code}，res text:{res.text}")
 
 def save_data():
-    global steam_list, group_list, exclude_game, inactive_groups,game_discounted_cache,game_discounted_subscribe
+    global steam_list, group_list, exclude_game, inactive_groups,game_discounted_cache,game_discounted_subscribe,owned_games
     new_file_group.write_text(json.dumps(group_list)) 
     new_file_steam.write_text(json.dumps(steam_list))
     exclude_game_file.write_text(json.dumps(exclude_game))
     inactive_groups_file.write_text(json.dumps(inactive_groups))
     game_discounted_cache_file.write_text(json.dumps(game_discounted_cache))
     game_discounted_subscribe_file.write_text(json.dumps(game_discounted_subscribe))
+    owned_games_file.write_text(json.dumps(owned_games))
     
 async def no_private_rule(target: MsgTarget) -> bool:
     return not target.private

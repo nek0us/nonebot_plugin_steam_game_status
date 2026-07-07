@@ -40,6 +40,7 @@ exclude_game_file = data_dir / "exclude_game"
 game_free_cache_file = data_dir / "game_free_cache.json"
 game_discounted_cache_file = data_dir / "game_discounted_cache.json"
 game_discounted_subscribe_file = data_dir / "game_discounted_subscribe.json"
+owned_games_file = data_dir / "owned_games.json"
 
 exclude_game_default = ["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
 
@@ -54,6 +55,7 @@ if not old_dirpath.exists():
         game_cache_file.write_text("{}")
         exclude_game_file.write_text("{}")
         game_free_cache_file.write_text("[]")
+        owned_games_file.write_text("{}")
     else:
         # 存在，准备好的新用户
         # 看看exclude在不在
@@ -198,6 +200,27 @@ if not game_discounted_cache_file.exists():
 if not game_discounted_subscribe_file.exists():
     game_discounted_subscribe_file.write_text("{}")
 
+# 26.07.07 Steam 游戏库入库播报适配
+steam_group_owned_game_26_07_07: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
+value_owned_game_26_07_07 = next(iter(steam_group_owned_game_26_07_07.values()), None)
+if value_owned_game_26_07_07:
+    if "owned_game" not in value_owned_game_26_07_07:
+        steam_group_owned_game_dict_26_07_07 = {}
+        for group_id in steam_group_owned_game_26_07_07:
+            steam_group_owned_game_dict_26_07_07[group_id] = GroupDataNew(
+                status=steam_group_owned_game_26_07_07[group_id]["status"],
+                user_list=steam_group_owned_game_26_07_07[group_id]["user_list"],
+                adapter=steam_group_owned_game_26_07_07[group_id]["adapter"],
+                xijiayi=steam_group_owned_game_26_07_07[group_id]["xijiayi"],
+                image=steam_group_owned_game_26_07_07[group_id]["image"],
+                stop_image=steam_group_owned_game_26_07_07[group_id]["stop_image"],
+                owned_game=False
+            )
+        new_file_group.write_text(json.dumps(steam_group_owned_game_dict_26_07_07))
+        logger.success("steam 0.3.6 26.07.07 游戏库入库播报开关数据更新成功")
+if not owned_games_file.exists():
+    owned_games_file.write_text("{}")
+
 group_list: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
 steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8")) 
 gameid2name = json.loads(game_cache_file.read_text("utf8"))
@@ -205,6 +228,7 @@ exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf
 game_free_cache: List[str] = json.loads(game_free_cache_file.read_text("utf8"))
 game_discounted_cache:List[str] = json.loads(game_discounted_cache_file.read_text("utf8"))
 game_discounted_subscribe: Dict[str, List[str]] = json.loads(game_discounted_subscribe_file.read_text("utf8"))
+owned_games: Dict[str, Dict[str, str]] = json.loads(owned_games_file.read_text("utf8"))
 # 与bot失联的group列表
 inactive_groups: List[str] = []
 inactive_groups_file: Path = data_dir / "inactive_groups.json"
