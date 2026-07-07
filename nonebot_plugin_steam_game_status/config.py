@@ -26,6 +26,7 @@ class Config(BaseModel):
     steam_subscribe_time: Union[str, List[str]] = ["08:00"]
     steam_owned_game_interval: int = 60
     steam_dynamic_avatar_card: bool = False
+    steam_dynamic_card_cache: bool = True
     
     @validator("steam_isthereanydeal_key")
     def check_isthereanydeal_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
@@ -151,7 +152,15 @@ class Config(BaseModel):
     @validator("steam_dynamic_avatar_card")
     def check_dynamic_avatar_card(cls, v: bool) -> bool:
         if v:
-            logger.info("steam_dynamic_avatar_card 已开启，将尝试使用 Steam 动态头像资源，卡片输出仍为静态图片")
+            logger.info("steam_dynamic_avatar_card 已开启，将尝试生成动态头像卡片")
+        return v
+
+    @validator("steam_dynamic_card_cache")
+    def check_dynamic_card_cache(cls, v: bool) -> bool:
+        if v:
+            logger.info("steam_dynamic_card_cache 动态卡片缓存 已开启")
+        else:
+            logger.info("steam_dynamic_card_cache 动态卡片缓存 已关闭")
         return v
     
 config_steam = get_plugin_config(Config)

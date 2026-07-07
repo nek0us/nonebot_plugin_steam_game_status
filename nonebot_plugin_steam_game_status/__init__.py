@@ -3,6 +3,8 @@ import json
 import time
 import random
 import asyncio
+import io
+import hashlib
 from pathlib import Path
 
 from typing import Dict, List, Optional, Literal
@@ -17,7 +19,14 @@ from nonebot.plugin import inherit_supported_adapters
 
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
-from .utils import http_client, driver, HTTPClientSession, to_enum
+from .utils import http_client, driver, HTTPClientSession, to_enum, playwright_context
+from .card import (
+    STEAM_CARD_ANIMATION_FRAME_COUNT,
+    STEAM_CARD_ANIMATION_FRAME_DURATION_MS,
+    build_steam_card_cache_key,
+    is_animated_image_url,
+    render_steam_card_template,
+)
 from .model import UserData, SafeResponse, create_group_data
 from .config import Config, __version__, config_steam, bot_name, get_steam_api_domain
 from .api import (
@@ -51,6 +60,7 @@ from .source import (
     exclude_game,
     game_discounted_cache,
     owned_games,
+    dynamic_card_cache_dir,
 )
 
 require("nonebot_plugin_alconna")
@@ -62,6 +72,8 @@ from nonebot_plugin_apscheduler import scheduler  # noqa: E402
 
 require("nonebot_plugin_htmlrender")
 from nonebot_plugin_htmlrender import template_to_pic  # noqa: E402
+
+from PIL import Image as PILImage  # noqa: E402
 
 __plugin_meta__ = PluginMetadata(
     name="Steam游戏状态",
@@ -142,6 +154,77 @@ async def render_steam_card(avatar_url: str, player_name: str, game_name: str, a
         return pic_data
     except Exception as e:
         logger.error(f"渲染 Steam 卡片失败: {e}")
+        return None
+
+
+async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name: str, action_text: str) -> Optional[bytes]:
+    if not config_steam.steam_dynamic_avatar_card or not is_animated_image_url(avatar_url):
+        return None
+
+    try:
+        template_path = Path(__file__).parent / "templates"
+        template_file = template_path / "steam_card.html"
+        if not template_file.exists():
+            logger.warning("Steam卡片模板文件 steam_card.html 不存在，跳过动态渲染")
+            return None
+
+        template_html = template_file.read_text("utf8")
+        template_digest = hashlib.sha256(template_html.encode("utf8")).hexdigest()
+        cache_key = build_steam_card_cache_key(
+            avatar_url=avatar_url,
+            player_name=player_name,
+            action_text=action_text,
+            game_name=game_name,
+            template_digest=template_digest,
+        )
+        cache_file = dynamic_card_cache_dir / f"{cache_key}.gif"
+        if config_steam.steam_dynamic_card_cache and cache_file.exists():
+            logger.debug(f"Steam 动态卡片缓存命中: {cache_key}")
+            return cache_file.read_bytes()
+
+        html_content = render_steam_card_template(
+            template_html=template_html,
+            avatar_url=avatar_url,
+            player_name=player_name,
+            action_text=action_text,
+            game_name=game_name,
+        )
+        frames = []
+        async with playwright_context() as pc:
+            page = await pc.new_page()
+            await page.set_viewport_size({"width": 426, "height": 100})
+            await page.set_content(html_content, wait_until="networkidle")
+            await page.wait_for_selector(".steam-card", state="visible", timeout=10000)
+            await page.wait_for_timeout(200)
+            card = await page.query_selector(".steam-card")
+            if not card:
+                return None
+
+            for _ in range(STEAM_CARD_ANIMATION_FRAME_COUNT):
+                frame_bytes = await card.screenshot(type="png", omit_background=True)
+                frames.append(PILImage.open(io.BytesIO(frame_bytes)).convert("RGBA"))
+                await page.wait_for_timeout(STEAM_CARD_ANIMATION_FRAME_DURATION_MS)
+
+        if not frames:
+            return None
+
+        output = io.BytesIO()
+        frames[0].save(
+            output,
+            format="GIF",
+            save_all=True,
+            append_images=frames[1:],
+            duration=STEAM_CARD_ANIMATION_FRAME_DURATION_MS,
+            loop=0,
+            disposal=2,
+        )
+        gif_data = output.getvalue()
+        if config_steam.steam_dynamic_card_cache:
+            cache_file.write_bytes(gif_data)
+            logger.debug(f"Steam 动态卡片缓存写入: {cache_key}")
+        return gif_data
+    except Exception as e:
+        logger.error(f"渲染 Steam 动态卡片失败: {e}")
         return None
 
 
@@ -371,12 +454,19 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
 
                 if should_render_card:
                     try:
-                        card_image_bytes = await render_steam_card(
+                        card_image_bytes = await render_dynamic_steam_card(
                             avatar_url=avatar_url,
                             player_name=res_info['personaname'],
                             game_name=game_name_for_msg,
                             action_text=action_text_for_card
                         )
+                        if not card_image_bytes:
+                            card_image_bytes = await render_steam_card(
+                                avatar_url=avatar_url,
+                                player_name=res_info['personaname'],
+                                game_name=game_name_for_msg,
+                                action_text=action_text_for_card
+                            )
                     except Exception as e:
                         logger.error(f"Steam卡片预渲染失败: {e}")
 
