@@ -51,6 +51,20 @@ class TestSteamCardCache(unittest.TestCase):
 
         self.assertNotEqual(fast_key, slow_key)
 
+    def test_cache_key_includes_capture_interval(self):
+        base = {
+            "avatar_url": "https://example.com/avatar.gif",
+            "player_name": "Alice",
+            "action_text": "开始玩",
+            "game_name": "Game",
+            "template_digest": "template",
+        }
+
+        dense_key = card.build_steam_card_cache_key(capture_interval_ms=80, **base)
+        sparse_key = card.build_steam_card_cache_key(capture_interval_ms=150, **base)
+
+        self.assertNotEqual(dense_key, sparse_key)
+
     def test_detects_gif_avatar_url(self):
         self.assertTrue(card.is_animated_image_url("https://example.com/avatar.GIF?size=small"))
         self.assertFalse(card.is_animated_image_url("https://example.com/avatar.jpg"))

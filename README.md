@@ -104,6 +104,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_dynamic_avatar_card | 否 | false | bool | 尝试使用 Steam 动态头像资源生成动态 GIF 卡片 |
 | steam_dynamic_card_cache | 否 | true | bool | 动态 GIF 卡片缓存开关 |
 | steam_dynamic_card_frame_duration_ms | 否 | 120 | int | 动态 GIF 卡片帧间隔，单位毫秒 |
+| steam_dynamic_card_capture_interval_ms | 否 | 80 | int | 动态 GIF 卡片截图采样间隔，单位毫秒 |
 ---
 steam_tail_tone 示例
 ```.env

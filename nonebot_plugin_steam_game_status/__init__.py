@@ -176,6 +176,7 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             game_name=game_name,
             template_digest=template_digest,
             frame_duration_ms=config_steam.steam_dynamic_card_frame_duration_ms,
+            capture_interval_ms=config_steam.steam_dynamic_card_capture_interval_ms,
         )
         cache_file = dynamic_card_cache_dir / f"{cache_key}.gif"
         if config_steam.steam_dynamic_card_cache and cache_file.exists():
@@ -203,7 +204,7 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             for _ in range(STEAM_CARD_ANIMATION_FRAME_COUNT):
                 frame_bytes = await card.screenshot(type="png", omit_background=True)
                 frames.append(PILImage.open(io.BytesIO(frame_bytes)).convert("RGBA"))
-                await page.wait_for_timeout(config_steam.steam_dynamic_card_frame_duration_ms)
+                await page.wait_for_timeout(config_steam.steam_dynamic_card_capture_interval_ms)
 
         if not frames:
             return None
@@ -656,25 +657,27 @@ def ensure_group_data(target: MsgTarget) -> str:
     return group_id
 
 
-async def initialize_owned_games_baseline(steam_ids: List[str]) -> tuple[int, int]:
+async def initialize_owned_games_baseline(steam_ids: List[str]) -> tuple[int, List[str]]:
     created = 0
-    failed = 0
+    failed_steam_ids = []
     for steam_id in set(steam_ids):
         if steam_id in owned_games:
             continue
         try:
             current_games = await get_owned_games(steam_id)
         except Exception as e:
-            failed += 1
+            failed_steam_ids.append(steam_id)
             logger.warning(f"steam游戏库基准建立异常，steam_id:{steam_id}：{e.args}")
             continue
         if current_games is None:
-            failed += 1
+            failed_steam_ids.append(steam_id)
+            nickname = steam_list.get(steam_id, {}).get("nickname", "")
+            logger.warning(f"steam游戏库基准建立失败，steam_id:{steam_id}，昵称:{nickname}，可能游戏库不可见或接口返回为空")
             continue
         owned_games[steam_id] = current_games
         created += 1
         logger.info(f"steam游戏库入库播报建立基准，steam_id:{steam_id}，游戏数：{len(current_games)}")
-    return created, failed
+    return created, failed_steam_ids
 
 
 @steam_cmd.assign("add")
@@ -884,13 +887,19 @@ async def steam_owned_game_handle(target: MsgTarget, status: Match[str]):
         owned_game_enabled = str(status.result) == "开启"
         group_list[group_id]["owned_game"] = owned_game_enabled
         created = 0
-        failed = 0
+        failed_steam_ids = []
         if owned_game_enabled:
-            created, failed = await initialize_owned_games_baseline(group_list[group_id]["user_list"])
+            created, failed_steam_ids = await initialize_owned_games_baseline(group_list[group_id]["user_list"])
         save_data()
         baseline_text = f"，已建立 {created} 个游戏库基准"
-        if failed:
-            baseline_text += f"，{failed} 个失败"
+        if failed_steam_ids:
+            failed_names = [
+                steam_list.get(steam_id, {}).get("nickname") or steam_id
+                for steam_id in failed_steam_ids[:3]
+            ]
+            baseline_text += f"，{len(failed_steam_ids)} 个失败：{'、'.join(failed_names)}"
+            if len(failed_steam_ids) > 3:
+                baseline_text += " 等"
         await UniMessage(f"Steam 入库播报已{str(status.result)}{baseline_text if owned_game_enabled else ''}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 

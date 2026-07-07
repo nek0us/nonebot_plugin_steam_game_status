@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 STEAM_CARD_ANIMATION_FRAME_COUNT = 12
 STEAM_CARD_ANIMATION_FRAME_DURATION_MS = 120
+STEAM_CARD_ANIMATION_CAPTURE_INTERVAL_MS = 80
 
 
 def is_animated_image_url(url: str) -> bool:
@@ -21,6 +22,7 @@ def build_steam_card_cache_key(
     template_digest: str,
     frame_count: int = STEAM_CARD_ANIMATION_FRAME_COUNT,
     frame_duration_ms: int = STEAM_CARD_ANIMATION_FRAME_DURATION_MS,
+    capture_interval_ms: int = STEAM_CARD_ANIMATION_CAPTURE_INTERVAL_MS,
 ) -> str:
     cache_data = {
         "avatar_url": avatar_url,
@@ -30,6 +32,7 @@ def build_steam_card_cache_key(
         "template_digest": template_digest,
         "frame_count": frame_count,
         "frame_duration_ms": frame_duration_ms,
+        "capture_interval_ms": capture_interval_ms,
     }
     cache_json = json.dumps(cache_data, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(cache_json.encode("utf8")).hexdigest()
