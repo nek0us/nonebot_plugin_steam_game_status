@@ -30,6 +30,7 @@ class Config(BaseModel):
     steam_dynamic_card_frame_duration_ms: int = 120
     steam_dynamic_card_capture_interval_ms: int = 80
     steam_dynamic_card_timeout_ms: int = 10000
+    steam_dynamic_avatar_cache_ttl_minutes: int = 60
     
     @validator("steam_isthereanydeal_key")
     def check_isthereanydeal_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
@@ -183,6 +184,12 @@ class Config(BaseModel):
         if v >= 1000:
             return v
         raise ValueError("steam_dynamic_card_timeout_ms 必须为大于等于1000的整数")
+
+    @validator("steam_dynamic_avatar_cache_ttl_minutes")
+    def check_dynamic_avatar_cache_ttl_minutes(cls, v: int) -> int:
+        if v >= 0:
+            return v
+        raise ValueError("steam_dynamic_avatar_cache_ttl_minutes 必须为大于等于0的整数")
     
 config_steam = get_plugin_config(Config)
 bot_name = list(get_driver().config.nickname)
