@@ -86,6 +86,7 @@ __plugin_meta__ = PluginMetadata(
             steam排除列表
             steam播报开启/steam播报打开  
             steam播报关闭/steam播报停止 
+            steam图片播报开启/steam图片播报关闭
             steam喜加一
             steam喜加一订阅
             steam喜加一退订
@@ -334,16 +335,23 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
             if should_notify:
                 card_image_bytes = None
                 avatar_url = res_info.get("avatarfull", "")
+                image_enabled_group_ids = [
+                    group_id
+                    for group_id in steam_id_to_groups[steam_id]
+                    if group_list.get(str(group_id), {}).get("image", True)
+                ]
+                should_render_card = bool(image_enabled_group_ids)
 
-                try:
-                    card_image_bytes = await render_steam_card(
-                        avatar_url=avatar_url,
-                        player_name=res_info['personaname'],
-                        game_name=game_name_for_msg,
-                        action_text=action_text_for_card
-                    )
-                except Exception as e:
-                    logger.error(f"Steam卡片预渲染失败: {e}")
+                if should_render_card:
+                    try:
+                        card_image_bytes = await render_steam_card(
+                            avatar_url=avatar_url,
+                            player_name=res_info['personaname'],
+                            game_name=game_name_for_msg,
+                            action_text=action_text_for_card
+                        )
+                    except Exception as e:
+                        logger.error(f"Steam卡片预渲染失败: {e}")
 
                 for group_id in steam_id_to_groups[steam_id]:
                     if game_name_for_msg in exclude_game[str(group_id)]:
@@ -359,7 +367,8 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
 
                     if target:
                         msg_to_send = None
-                        if card_image_bytes:
+                        use_image_broadcast = group_id in image_enabled_group_ids
+                        if use_image_broadcast and card_image_bytes:
                             msg_to_send = UniMessage.image(raw=card_image_bytes)
                         else:
                             tone = config_steam.steam_tail_tone
@@ -443,6 +452,7 @@ steam_command_alc = Alconna(
     Option("排除列表", separators="", compact=True),
     Option("list", alias=["列表", "绑定列表", "播报列表"], separators="", compact=True),
     Option("播报", Args["status", str], separators="", compact=True),
+    Option("图片播报", Args["status", str], separators="", compact=True),
     Option("墙", Args["user", str], separators="", compact=True),
     Option("喜加一", Args["action", Optional[Literal["订阅", "退订"]]], separators="", compact=True),
     Option("失联群列表", separators="", compact=True),
@@ -627,6 +637,20 @@ async def steam_on_handle(target: MsgTarget, status: Match[str]):
         group_list[str(target.id)]["status"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
+
+
+@steam_cmd.assign("图片播报")
+async def steam_image_handle(target: MsgTarget, status: Match[str]):
+    if str(status.result) not in ("开启", "关闭"):
+        await UniMessage(f"仅允许设置图片播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
+    else:
+        global group_list
+        if str(target.id) not in group_list:
+            group_list[str(target.id)] = create_group_data(
+                adapter=to_enum(target.adapter).value if target.adapter else "")
+        group_list[str(target.id)]["image"] = True if str(status.result) == "开启" else False
+        save_data()
+        await UniMessage(f"Steam 图片播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 
 @steam_cmd.assign("喜加一")

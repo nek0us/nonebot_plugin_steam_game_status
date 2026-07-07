@@ -25,13 +25,14 @@ class GroupData3(GroupData2):
     xijiayi: bool
     
 class GroupDataNew(GroupData3):
-    pass
+    image: bool
 
 def create_group_data(
         status: bool = True,
         user_list: List[str] = [],
         adapter: str = "OneBot V11",
-        xijiayi: bool = False
+        xijiayi: bool = False,
+        image: bool = True,
         ) -> GroupDataNew:
     '''创建数据结构统一为函数调用'''
     return GroupDataNew(
@@ -39,6 +40,7 @@ def create_group_data(
         user_list=user_list,
         adapter=adapter,
         xijiayi=xijiayi,
+        image=image,
     )
 
 class UserData(TypedDict):
