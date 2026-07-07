@@ -92,7 +92,7 @@ __plugin_meta__ = PluginMetadata(
             steam结束图片播报开启/steam结束图片播报关闭
                 默认开始/切换游戏使用图片播报，结束游戏使用文字播报。
             steam入库播报开启/steam入库播报关闭
-                默认关闭。每小时检查一次公开游戏库，只播报新增游戏。
+                默认关闭。按 steam_owned_game_interval 检查公开游戏库，只播报新增游戏。
             steam喜加一
             steam喜加一订阅
             steam喜加一退订
@@ -449,7 +449,12 @@ async def now_steam():
                 logger.debug("steam finally保存完成")
 
 
-@scheduler.scheduled_job("interval", hours=1, id="steam_owned_games", misfire_grace_time=300)
+@scheduler.scheduled_job(
+    "interval",
+    minutes=config_steam.steam_owned_game_interval,
+    id="steam_owned_games",
+    misfire_grace_time=(config_steam.steam_owned_game_interval * 60 - 1),
+)
 async def now_steam_owned_games():
     if not config_steam.steam_web_key:
         return

@@ -24,6 +24,7 @@ class Config(BaseModel):
     steam_link_r18_game: Union[bool, List[str]] = False
     steam_tail_tone: str = ""
     steam_subscribe_time: Union[str, List[str]] = ["08:00"]
+    steam_owned_game_interval: int = 60
     steam_dynamic_avatar_card: bool = False
     
     @validator("steam_isthereanydeal_key")
@@ -59,6 +60,12 @@ class Config(BaseModel):
         if v >= 1:
             return v
         raise ValueError("steam查询间隔必须为大于0的整数")    
+
+    @validator("steam_owned_game_interval")
+    def check_steam_owned_game_interval(cls, v: int) -> int:
+        if v >= 1:
+            return v
+        raise ValueError("steam游戏库入库播报查询间隔必须为大于0的整数")
     
     @validator("steam_proxy")
     def check_proxy(cls,v:Union[str, None]) -> Union[str, None]:

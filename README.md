@@ -100,6 +100,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_link_r18_game | 否 | false | bool/list | 识别r18游戏 |
 | steam_tail_tone | 否 | "" | str | bot尾音 |
 | steam_subscribe_time | 否 | ["08:00"] | str/List[str] | 喜加一订阅检索推送时间 |
+| steam_owned_game_interval | 否 | 60 | int | 入库播报查询间隔，单位分钟 |
 | steam_dynamic_avatar_card | 否 | false | bool | 动态头像卡片预留开关，当前版本仍使用静态卡片渲染 |
 ---
 steam_tail_tone 示例
@@ -232,7 +233,7 @@ pip install nonebot2[httpx]
 | steam播报关闭/steam播报停止 | 否 | 群聊 | 群员 |       关闭本群播报        |  
 | steam图片播报开启/steam图片播报关闭 | 否 | 群聊 | 群员 |       设置开始/切换游戏是否使用图片播报，默认开启        |
 | steam结束图片播报开启/steam结束图片播报关闭 | 否 | 群聊 | 群员 |       设置结束游戏是否使用图片播报，默认关闭        |
-| steam入库播报开启/steam入库播报关闭 | 否 | 群聊 | 群员 |       设置是否每小时检查公开游戏库新增游戏，默认关闭        |
+| steam入库播报开启/steam入库播报关闭 | 否 | 群聊 | 群员 |       设置是否定时检查公开游戏库新增游戏，默认关闭        |
 | steam喜加一 | 否 | 群聊 | 群员 |       主动获取喜加一资讯        |    
 | steam喜加一订阅 | 否 | 群聊 | 群员 |       开启本群喜加一推送        |    
 | steam喜加一退订 | 否 | 群聊 | 群员 |       关闭本群喜加一推送        |  
