@@ -619,9 +619,10 @@ async def now_steam_owned_games():
 
         old_games = owned_games[steam_id]
         new_appids = sorted(set(current_games) - set(old_games))
+        merged_games = {**old_games, **current_games}
 
         if not new_appids:
-            owned_games[steam_id] = current_games
+            owned_games[steam_id] = merged_games
             continue
 
         player_name = steam_list.get(steam_id, {}).get("nickname", steam_id)
@@ -642,7 +643,7 @@ async def now_steam_owned_games():
                 await test_group_active(group_id)
 
         if sent:
-            owned_games[steam_id] = current_games
+            owned_games[steam_id] = merged_games
         else:
             logger.warning(f"Steam 游戏库入库播报全部发送失败，保留旧基准等待下次重试，steam_id:{steam_id}")
 
