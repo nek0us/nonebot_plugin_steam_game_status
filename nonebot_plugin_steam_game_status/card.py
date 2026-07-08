@@ -113,6 +113,7 @@ async def render_steam_card(
     action_text: str,
     background_url: str = "",
     avatar_grayscale: bool = False,
+    stopped: bool = False,
 ) -> Optional[bytes]:
     from nonebot.log import logger
     from nonebot_plugin_htmlrender import template_to_pic
@@ -127,6 +128,8 @@ async def render_steam_card(
         card_class, viewport_width, viewport_height = get_steam_card_layout(game_name)
         if background_url:
             card_class = _append_card_class(card_class, "game-bg")
+        if stopped:
+            card_class = _append_card_class(card_class, "stopped")
         if avatar_grayscale:
             card_class = _append_card_class(card_class, "grayscale-avatar")
         background_style = ""
@@ -295,6 +298,7 @@ async def render_dynamic_steam_card(
     action_text: str,
     background_url: str = "",
     avatar_grayscale: bool = False,
+    stopped: bool = False,
 ) -> Optional[bytes]:
     from nonebot.log import logger
 
@@ -319,6 +323,8 @@ async def render_dynamic_steam_card(
         card_class, viewport_width, viewport_height = get_steam_card_layout(game_name, dynamic=True)
         if background_url:
             card_class = _append_card_class(card_class, "game-bg")
+        if stopped:
+            card_class = _append_card_class(card_class, "stopped")
         if avatar_grayscale:
             card_class = _append_card_class(card_class, "grayscale-avatar")
         if config_steam.steam_dynamic_card_capture_duration_ms > 0:

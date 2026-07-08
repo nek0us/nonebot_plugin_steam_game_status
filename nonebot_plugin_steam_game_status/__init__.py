@@ -320,6 +320,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                 card_image_bytes_grayscale = None
 
                 async def render_status_card(avatar_grayscale: bool = False) -> Optional[bytes]:
+                    stopped = action_type == "stop"
                     card_image = await render_dynamic_steam_card(
                         avatar_url=avatar_url,
                         player_name=res_info['personaname'],
@@ -327,6 +328,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                         action_text=action_text_for_card,
                         background_url=background_url,
                         avatar_grayscale=avatar_grayscale,
+                        stopped=stopped,
                     )
                     if not card_image:
                         card_image = await render_steam_card(
@@ -336,6 +338,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                             action_text=action_text_for_card,
                             background_url=background_url,
                             avatar_grayscale=avatar_grayscale,
+                            stopped=stopped,
                         )
                     return card_image
 
