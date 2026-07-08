@@ -40,6 +40,10 @@ from .source import (
 require("nonebot_plugin_htmlrender")
 from nonebot_plugin_htmlrender import html_to_pic  # noqa: E402
 
+class SteamPlaytimeUnavailableError(Exception):
+    """Steam 游戏时长拼图不可用。"""
+
+
 async def steam_link_rule() -> bool:
     if config_steam.steam_plugin_enabled and config_steam.steam_link_enabled:
         return True
@@ -513,12 +517,22 @@ async def get_steam_playtime(steam_id: str) -> bytes:
         try:
             await page.wait_for_load_state('networkidle')
             await page.wait_for_selector("#games-stage", state="visible", timeout=60000)
-        except TimeoutError:
-            logger.warning(f"Steam 游戏时长拼图获取，ID:{steam_id}, url: {url}, timeout")
+        except Exception as e:
+            logger.warning(f"Steam 游戏时长拼图获取失败，ID:{steam_id}, url: {url}, error: {e}")
+            games_stage = await page.query_selector("#games-stage")
+            if games_stage and not await games_stage.is_visible():
+                raise SteamPlaytimeUnavailableError(
+                    "没有获取到公开的 Steam 游戏时长数据，可能是个人资料或游戏详情为私密、账号资料未设置，或拼图服务暂时无法生成"
+                ) from e
+            raise SteamPlaytimeUnavailableError(
+                "Steam 游戏时长拼图生成超时，可能是隐私设置、账号资料未设置，或拼图服务暂时不可用"
+            ) from e
         games_stage = await page.query_selector("#games-stage")
-        if games_stage:
+        if games_stage and await games_stage.is_visible():
             return await games_stage.screenshot(type="png")
-        raise Exception("no games_stage")
+        raise SteamPlaytimeUnavailableError(
+            "没有获取到公开的 Steam 游戏时长数据，可能是个人资料或游戏详情为私密、账号资料未设置，或拼图服务暂时无法生成"
+        )
 
 async def get_discounted_game_info(app_id: str) -> Tuple[dict, dict]:
     logger.info(f"steam开始检查游戏id {app_id} 是否打折...")

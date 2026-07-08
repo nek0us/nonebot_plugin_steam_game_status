@@ -45,6 +45,7 @@ from .api import (
     get_group_target_bot,
     test_group_active,
     get_steam_playtime,
+    SteamPlaytimeUnavailableError,
     get_discounted_games_info,
 )
 from .owned_games import initialize_owned_games_baseline, run_owned_games_check
@@ -908,9 +909,12 @@ async def steam_wall(matcher: Matcher, user: Match[str]):
     try:
         screenshot = await get_steam_playtime(str(user.result))
         await UniMessage.image(raw=screenshot).send()
+    except SteamPlaytimeUnavailableError as e:
+        logger.info(f"获取 Steam 游戏时长拼图不可用：{e}")
+        await UniMessage.text(f"获取 Steam 游戏时长拼图失败{config_steam.steam_tail_tone}：{e}").send()
     except Exception as e:
         logger.warning(f"获取 Steam 游戏时长拼图出错：{e.args}")
-        await UniMessage.text(f"获取 Steam 游戏时长拼图出错{config_steam.steam_tail_tone} ：{e.args}").send()
+        await UniMessage.text(f"获取 Steam 游戏时长拼图出错{config_steam.steam_tail_tone}，请稍后再试或检查日志").send()
     await matcher.finish()
 
 
