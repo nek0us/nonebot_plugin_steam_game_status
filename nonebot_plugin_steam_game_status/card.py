@@ -42,6 +42,10 @@ def build_steam_game_background_url(appid: str) -> str:
     return STEAM_GAME_BACKGROUND_URL_TEMPLATE.format(appid=appid)
 
 
+def _append_card_class(card_class: str, extra_class: str) -> str:
+    return f"{card_class} {extra_class}".strip()
+
+
 def build_steam_card_cache_key(
     *,
     avatar_url: str,
@@ -108,6 +112,7 @@ async def render_steam_card(
     game_name: str,
     action_text: str,
     background_url: str = "",
+    avatar_grayscale: bool = False,
 ) -> Optional[bytes]:
     from nonebot.log import logger
     from nonebot_plugin_htmlrender import template_to_pic
@@ -121,7 +126,9 @@ async def render_steam_card(
 
         card_class, viewport_width, viewport_height = get_steam_card_layout(game_name)
         if background_url:
-            card_class = f"{card_class} game-bg".strip()
+            card_class = _append_card_class(card_class, "game-bg")
+        if avatar_grayscale:
+            card_class = _append_card_class(card_class, "grayscale-avatar")
         background_style = ""
         if background_url:
             background_style = f"--game-background-url: url('{html.escape(background_url, quote=True)}');"
@@ -287,6 +294,7 @@ async def render_dynamic_steam_card(
     game_name: str,
     action_text: str,
     background_url: str = "",
+    avatar_grayscale: bool = False,
 ) -> Optional[bytes]:
     from nonebot.log import logger
 
@@ -310,7 +318,9 @@ async def render_dynamic_steam_card(
         template_digest = hashlib.sha256(template_html.encode("utf8")).hexdigest()
         card_class, viewport_width, viewport_height = get_steam_card_layout(game_name, dynamic=True)
         if background_url:
-            card_class = f"{card_class} game-bg".strip()
+            card_class = _append_card_class(card_class, "game-bg")
+        if avatar_grayscale:
+            card_class = _append_card_class(card_class, "grayscale-avatar")
         if config_steam.steam_dynamic_card_capture_duration_ms > 0:
             frame_count = max(
                 config_steam.steam_dynamic_card_frame_count,
