@@ -83,28 +83,54 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 
 获取 [steam_web_key](https://steamcommunity.com/dev/apikey)
 
-在 nonebot2 项目的`.env`文件中添加下表中的必填配置
+在 nonebot2 项目的`.env`文件中添加下表中的必填配置。
+
+### 基础配置
 
 | 配置项 | 必填 | 默认值 | 类型 | 说明 |
 |:-----:|:----:|:----:|:----:|:----:|
-| steam_web_key | 是 | 无 | str 或 list | Steam Api Key |
-| steam_isthereanydeal_key | 否 | 无 | str 或 list | isthereanydeal Api Key 查询史低 |
+| steam_web_key | 是 | 无 | str 或 list | Steam Web API Key |
+| steam_isthereanydeal_key | 否 | 无 | str 或 list | IsThereAnyDeal API Key，用于查询史低 |
 | steam_command_priority | 否 | 5 | int | 事件处理函数优先级 |
-| steam_interval | 否 | 1 | int | steam查询间隔，单位分钟 |
-| steam_tail_tone | 否 | "" | str | bot尾音口癖 |
+| steam_plugin_enabled | 否 | true | bool | 插件全局开关 |
+| steam_tail_tone | 否 | "" | str | bot尾音 |
 | steam_proxy | 否 | None | str | 代理 |
 | steam_api_proxy | 否 | None | str | Steam API 反代域名 |
 | steam_store_proxy | 否 | None | str | Steam Store 反代域名 |
-| steam_link_enabled | 否 | true | bool | 链接识别全局开关 |
-| steam_area_game | 否 | false | bool/list | 识别其它区游戏 |
-| steam_link_r18_game | 否 | false | bool/list | 识别r18游戏 |
-| steam_tail_tone | 否 | "" | str | bot尾音 |
-| steam_subscribe_time | 否 | ["08:00"] | str/List[str] | 喜加一订阅检索推送时间 |
+| steam_subscribe_time | 否 | ["08:00"] | str/List[str] | 喜加一和折扣订阅检索推送时间 |
+
+### Steam 查询与 API 并发
+
+| 配置项 | 必填 | 默认值 | 类型 | 说明 |
+|:-----:|:----:|:----:|:----:|:----:|
+| steam_interval | 否 | 1 | int | 游戏状态查询间隔，单位分钟 |
+| steam_status_query_concurrency | 否 | 6 | int | 游戏状态查询并发上限。开始/切换/结束播报漏报或日志出现超时、420时可调低 |
 | steam_owned_game_interval | 否 | 60 | int | 入库播报查询间隔，单位分钟 |
-| steam_dynamic_avatar_card | 否 | false | bool | 尝试使用 Steam 动态头像资源生成动态 GIF 卡片 |
+| steam_owned_game_query_concurrency | 否 | 5 | int | 入库播报轮询并发上限 |
+| steam_owned_game_baseline_concurrency | 否 | 5 | int | 开启入库播报时建立游戏库基准的并发上限 |
+
+### 链接识别
+
+| 配置项 | 必填 | 默认值 | 类型 | 说明 |
+|:-----:|:----:|:----:|:----:|:----:|
+| steam_link_enabled | 否 | true | bool | 链接识别全局开关 |
+| steam_area_game | 否 | false | bool/list | 识别其它区游戏。可填 bool 或群号列表 |
+| steam_link_r18_game | 否 | false | bool/list | 识别 R18 游戏。可填 bool 或群号列表 |
+
+### 图片与动态卡片
+
+| 配置项 | 必填 | 默认值 | 类型 | 说明 |
+|:-----:|:----:|:----:|:----:|:----:|
+| steam_dynamic_avatar_card | 否 | false | bool | 尝试使用 Steam 动态头像资源生成动态 GIF 卡片。默认关闭 |
 | steam_dynamic_card_cache | 否 | true | bool | 动态 GIF 卡片缓存开关 |
-| steam_dynamic_card_frame_duration_ms | 否 | 120 | int | 动态 GIF 卡片帧间隔，单位毫秒 |
-| steam_dynamic_card_capture_interval_ms | 否 | 80 | int | 动态 GIF 卡片截图采样间隔，单位毫秒 |
+| steam_dynamic_card_preserve_avatar_gif_timing | 否 | true | bool | 生成动态卡片时尽量保留原头像 GIF 的帧数和播放速度 |
+| steam_dynamic_card_max_avatar_frames | 否 | 120 | int | 保留原头像 GIF 时序时的最大帧数。0 表示不限制，最接近原头像但生成更慢、文件更大 |
+| steam_dynamic_avatar_cache_ttl_minutes | 否 | 60 | int | 动态头像地址缓存时间，单位分钟。0 表示不缓存 |
+| steam_dynamic_card_timeout_ms | 否 | 15000 | int | 动态卡片渲染等待超时，单位毫秒 |
+| steam_dynamic_card_frame_count | 否 | 50 | int | 回退采样模式的最低帧数 |
+| steam_dynamic_card_frame_duration_ms | 否 | 80 | int | 回退手动模式的 GIF 帧间隔，单位毫秒 |
+| steam_dynamic_card_capture_interval_ms | 否 | 80 | int | 回退采样模式的截图采样间隔，单位毫秒 |
+| steam_dynamic_card_capture_duration_ms | 否 | 4000 | int | 回退采样模式的捕获总时长，单位毫秒。0 表示使用 `frame_count` + `frame_duration_ms` 手动模式 |
 ---
 steam_tail_tone 示例
 ```.env
@@ -134,6 +160,47 @@ steam_api_proxy="api.proxy.example.com"
 
 # 用于替代 store.steampowered.com
 steam_store_proxy="store.proxy.example.com"
+```
+
+Steam API 并发上限配置示例
+```.env
+# .env.xxx
+# 常规游戏状态查询，影响开始/切换/结束游戏播报
+steam_status_query_concurrency=6
+
+# 入库播报轮询
+steam_owned_game_query_concurrency=5
+
+# 开启入库播报时建立游戏库基准
+steam_owned_game_baseline_concurrency=5
+```
+
+如果日志中频繁出现 Steam API `420`、连接超时，或结束游戏偶发漏播，优先降低 `steam_status_query_concurrency`，例如改为 `4` 或 `5`。
+
+动态头像卡片配置示例
+```.env
+# .env.xxx
+# 开启动态头像卡片
+steam_dynamic_avatar_card=true
+
+# 推荐：尽量保留原 Steam 动态头像 GIF 的帧数和播放速度
+steam_dynamic_card_preserve_avatar_gif_timing=true
+steam_dynamic_card_max_avatar_frames=120
+steam_dynamic_card_cache=true
+steam_dynamic_card_timeout_ms=15000
+```
+
+如果希望尽量完整复刻原头像，可以取消帧数限制，但生成会更慢、GIF 文件可能更大：
+```.env
+steam_dynamic_card_max_avatar_frames=0
+```
+
+当原 GIF 时序保留失败时，会回退到截图采样模式，可用以下配置控制回退效果：
+```.env
+steam_dynamic_card_frame_count=50
+steam_dynamic_card_frame_duration_ms=80
+steam_dynamic_card_capture_interval_ms=80
+steam_dynamic_card_capture_duration_ms=4000
 ```
 
 单个 steam key 配置示例 (`steam_isthereanydeal_key` 同理)

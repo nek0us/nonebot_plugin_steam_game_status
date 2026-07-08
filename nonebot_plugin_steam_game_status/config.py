@@ -24,19 +24,19 @@ class Config(BaseModel):
     steam_link_r18_game: Union[bool, List[str]] = False
     steam_tail_tone: str = ""
     steam_subscribe_time: Union[str, List[str]] = ["08:00"]
-    steam_status_query_concurrency: int = 10
+    steam_status_query_concurrency: int = 6
     steam_owned_game_interval: int = 60
     steam_owned_game_query_concurrency: int = 5
     steam_owned_game_baseline_concurrency: int = 5
     steam_dynamic_avatar_card: bool = False
     steam_dynamic_card_cache: bool = True
-    steam_dynamic_card_preserve_avatar_gif_timing: bool = False
+    steam_dynamic_card_preserve_avatar_gif_timing: bool = True
     steam_dynamic_card_max_avatar_frames: int = 120
-    steam_dynamic_card_frame_count: int = 12
-    steam_dynamic_card_frame_duration_ms: int = 120
+    steam_dynamic_card_frame_count: int = 50
+    steam_dynamic_card_frame_duration_ms: int = 80
     steam_dynamic_card_capture_interval_ms: int = 80
     steam_dynamic_card_capture_duration_ms: int = 4000
-    steam_dynamic_card_timeout_ms: int = 10000
+    steam_dynamic_card_timeout_ms: int = 15000
     steam_dynamic_avatar_cache_ttl_minutes: int = 60
     
     @validator("steam_isthereanydeal_key")
