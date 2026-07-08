@@ -25,6 +25,7 @@ class Config(BaseModel):
     steam_tail_tone: str = ""
     steam_subscribe_time: Union[str, List[str]] = ["08:00"]
     steam_owned_game_interval: int = 60
+    steam_owned_game_baseline_concurrency: int = 5
     steam_dynamic_avatar_card: bool = False
     steam_dynamic_card_cache: bool = True
     steam_dynamic_card_frame_duration_ms: int = 120
@@ -71,6 +72,12 @@ class Config(BaseModel):
         if v >= 1:
             return v
         raise ValueError("steam游戏库入库播报查询间隔必须为大于0的整数")
+
+    @validator("steam_owned_game_baseline_concurrency")
+    def check_steam_owned_game_baseline_concurrency(cls, v: int) -> int:
+        if v >= 1:
+            return v
+        raise ValueError("steam_owned_game_baseline_concurrency 必须为大于0的整数")
     
     @validator("steam_proxy")
     def check_proxy(cls,v:Union[str, None]) -> Union[str, None]:

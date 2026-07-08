@@ -686,16 +686,26 @@ def ensure_group_data(target: MsgTarget) -> str:
 
 
 async def initialize_owned_games_baseline(steam_ids: List[str]) -> tuple[int, List[str]]:
+    semaphore = asyncio.Semaphore(config_steam.steam_owned_game_baseline_concurrency)
+    target_steam_ids = [steam_id for steam_id in set(steam_ids) if steam_id not in owned_games]
+
+    async def fetch_baseline(steam_id: str) -> tuple[str, Optional[Dict[str, str]], bool]:
+        async with semaphore:
+            try:
+                return steam_id, await get_owned_games(steam_id), False
+            except Exception as e:
+                logger.warning(f"steam游戏库基准建立异常，steam_id:{steam_id}：{e.args}")
+                return steam_id, None, True
+
     created = 0
     failed_steam_ids = []
-    for steam_id in set(steam_ids):
+    for steam_id, current_games, has_error in await asyncio.gather(
+        *(fetch_baseline(steam_id) for steam_id in target_steam_ids)
+    ):
         if steam_id in owned_games:
             continue
-        try:
-            current_games = await get_owned_games(steam_id)
-        except Exception as e:
+        if has_error:
             failed_steam_ids.append(steam_id)
-            logger.warning(f"steam游戏库基准建立异常，steam_id:{steam_id}：{e.args}")
             continue
         if current_games is None:
             failed_steam_ids.append(steam_id)
