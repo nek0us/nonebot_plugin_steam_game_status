@@ -26,7 +26,9 @@ class GroupData3(GroupData2):
     
 class GroupDataNew(GroupData3):
     image: bool
+    image_background: bool
     stop_image: bool
+    stop_image_background: bool
     stop_image_grayscale: bool
     owned_game: bool
 
@@ -36,7 +38,9 @@ def create_group_data(
         adapter: str = "OneBot V11",
         xijiayi: bool = False,
         image: bool = True,
+        image_background: bool = True,
         stop_image: bool = False,
+        stop_image_background: bool = False,
         stop_image_grayscale: bool = False,
         owned_game: bool = False,
         ) -> GroupDataNew:
@@ -47,7 +51,9 @@ def create_group_data(
         adapter=adapter,
         xijiayi=xijiayi,
         image=image,
+        image_background=image_background,
         stop_image=stop_image,
+        stop_image_background=stop_image_background,
         stop_image_grayscale=stop_image_grayscale,
         owned_game=owned_game,
     )
@@ -56,6 +62,7 @@ class UserData(TypedDict):
     time: int
     game_name: str
     nickname: str
+    game_id: str
 
 class SafeResponse:
     def __init__(self, response: Response):

@@ -120,7 +120,8 @@ if steam_list_tmp_first_val is not None and isinstance(steam_list_tmp_first_val,
         steam_list_dict[steam_id] = UserData(
             time=steam_list_tmp[steam_id][0],
             game_name=steam_list_tmp[steam_id][1],
-            nickname=steam_list_tmp[steam_id][2]
+            nickname=steam_list_tmp[steam_id][2],
+            game_id="",
             )
     new_file_steam.write_text(json.dumps(steam_list_dict))
     logger.success("steam 0.2.0 数据迁移成功")
@@ -223,6 +224,31 @@ if value_owned_game_26_07_07:
         logger.success("steam 0.3.6 26.07.07 游戏库入库播报开关数据更新成功")
 if not owned_games_file.exists():
     owned_games_file.write_text("{}")
+
+# 26.07.08 Steam 状态卡片背景群开关适配
+steam_group_card_background_26_07_08: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
+value_card_background_26_07_08 = next(iter(steam_group_card_background_26_07_08.values()), None)
+if value_card_background_26_07_08:
+    if any(
+        "image_background" not in group_data or "stop_image_background" not in group_data
+        for group_data in steam_group_card_background_26_07_08.values()
+    ):
+        steam_group_card_background_dict_26_07_08 = {}
+        for group_id, group_data in steam_group_card_background_26_07_08.items():
+            group_data.setdefault("image_background", True)
+            group_data.setdefault("stop_image_background", False)
+            steam_group_card_background_dict_26_07_08[group_id] = group_data
+        new_file_group.write_text(json.dumps(steam_group_card_background_dict_26_07_08))
+        logger.success("steam 0.4.0 26.07.08 状态卡片背景群开关数据更新成功")
+
+# 26.07.08 UserData 当前游戏 appid 适配
+steam_list_game_id_26_07_08: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8"))
+value_game_id_26_07_08 = next(iter(steam_list_game_id_26_07_08.values()), None)
+if value_game_id_26_07_08 and any("game_id" not in user_data for user_data in steam_list_game_id_26_07_08.values()):
+    for user_data in steam_list_game_id_26_07_08.values():
+        user_data.setdefault("game_id", "")
+    new_file_steam.write_text(json.dumps(steam_list_game_id_26_07_08))
+    logger.success("steam 0.4.0 26.07.08 用户当前游戏 appid 数据更新成功")
 
 group_list: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
 steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8")) 

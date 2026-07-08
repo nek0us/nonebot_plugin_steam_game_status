@@ -95,7 +95,9 @@ __plugin_meta__ = PluginMetadata(
             steam播报开启/steam播报打开  
             steam播报关闭/steam播报停止 
             steam图片播报开启/steam图片播报关闭
+            steam图片背景开启/steam图片背景关闭
             steam结束图片播报开启/steam结束图片播报关闭
+            steam结束图片背景开启/steam结束图片背景关闭
             steam结束图片黑白开启/steam结束图片黑白关闭
                 默认开始/切换游戏使用图片播报，结束游戏使用文字播报。
             steam入库播报开启/steam入库播报关闭
@@ -202,7 +204,7 @@ async def _():
             except Exception as e:
                 logger.warning(f"Steam id: {steam_id} 修复失败，下次重启时重试。失败原因 : {e.args}")
                 continue
-            steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name)
+            steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name, game_id="")
             logger.debug(f"Steam id: {steam_id},name: {steam_name} 异常，修复成功")
 
 
@@ -233,12 +235,17 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                 if game_name == "":
                     game_name = res_info["gameextrainfo"]
 
-                user_info = UserData(time=timestamp, game_name=game_name, nickname=res_info['personaname'])
+                appid_for_card = str(res_info.get("gameid", ""))
+                user_info = UserData(
+                    time=timestamp,
+                    game_name=game_name,
+                    nickname=res_info['personaname'],
+                    game_id=appid_for_card,
+                )
                 should_notify = True
                 action_type = "start"
                 game_name_for_msg = game_name
                 action_text_for_card = "开始玩"
-                appid_for_card = str(res_info.get("gameid", ""))
 
             elif "gameextrainfo" in res_info and steam_list[steam_id]["time"] != -1 and steam_list[steam_id][
                 "game_name"] != "":
@@ -249,18 +256,29 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                 if game_name != steam_list[steam_id]["game_name"]:
                     game_name_old = steam_list[steam_id]["game_name"]
                     timestamp = int(time.time() / 60)
-                    user_info = UserData(time=timestamp, game_name=game_name, nickname=res_info['personaname'])
+                    appid_for_card = str(res_info.get("gameid", ""))
+                    user_info = UserData(
+                        time=timestamp,
+                        game_name=game_name,
+                        nickname=res_info['personaname'],
+                        game_id=appid_for_card,
+                    )
                     should_notify = True
                     action_type = "switch"
                     game_name_for_msg = game_name
                     action_text_for_card = "开始玩"
-                    appid_for_card = str(res_info.get("gameid", ""))
 
             elif "gameextrainfo" not in res_info and steam_list[steam_id]["game_name"] != "":
                 timestamp = int(time.time() / 60)
                 game_name_old = steam_list[steam_id]["game_name"]
                 game_time_old = steam_list[steam_id]["time"]
-                user_info = UserData(time=timestamp, game_name="", nickname=res_info['personaname'])
+                appid_for_card = steam_list[steam_id].get("game_id", "")
+                user_info = UserData(
+                    time=timestamp,
+                    game_name="",
+                    nickname=res_info['personaname'],
+                    game_id="",
+                )
                 game_time = timestamp - game_time_old
                 should_notify = True
                 action_type = "stop"
@@ -284,23 +302,21 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
 
                 if game_name != game_name_old:
                     timestamp = int(time.time() / 60)
-                    user_info = UserData(time=timestamp, game_name=game_name, nickname=res_info['personaname'])
+                    appid_for_card = str(res_info.get("gameid", ""))
+                    user_info = UserData(
+                        time=timestamp,
+                        game_name=game_name,
+                        nickname=res_info['personaname'],
+                        game_id=appid_for_card,
+                    )
                     should_notify = True
                     action_type = "restart_switch"
                     game_name_for_msg = game_name
                     action_text_for_card = "开始玩"
-                    appid_for_card = str(res_info.get("gameid", ""))
 
             if should_notify:
                 card_image_bytes = None
                 avatar_url = await resolve_avatar_url(steam_id, res_info.get("avatarfull", ""))
-                background_url = (
-                    build_steam_game_background_url(appid_for_card)
-                    if config_steam.steam_card_game_background
-                    else ""
-                )
-                if background_url:
-                    logger.debug(f"Steam 状态卡片使用游戏背景图: appid={appid_for_card}, url={background_url}")
                 image_enabled_group_ids = [
                     group_id
                     for group_id in steam_id_to_groups[steam_id]
@@ -316,11 +332,47 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                     for group_id in image_enabled_group_ids
                     if action_type == "stop" and group_list.get(str(group_id), {}).get("stop_image_grayscale", False)
                 ]
-                should_render_normal_card = any(group_id not in grayscale_enabled_group_ids for group_id in image_enabled_group_ids)
+                background_enabled_group_ids = [
+                    group_id
+                    for group_id in image_enabled_group_ids
+                    if (
+                        group_list.get(str(group_id), {}).get("stop_image_background", False)
+                        if action_type == "stop"
+                        else group_list.get(str(group_id), {}).get("image_background", True)
+                    )
+                ]
+                should_render_normal_plain_card = any(
+                    group_id not in grayscale_enabled_group_ids and group_id not in background_enabled_group_ids
+                    for group_id in image_enabled_group_ids
+                )
+                should_render_normal_background_card = any(
+                    group_id not in grayscale_enabled_group_ids and group_id in background_enabled_group_ids
+                    for group_id in image_enabled_group_ids
+                )
+                should_render_grayscale_plain_card = any(
+                    group_id in grayscale_enabled_group_ids and group_id not in background_enabled_group_ids
+                    for group_id in image_enabled_group_ids
+                )
+                should_render_grayscale_background_card = any(
+                    group_id in grayscale_enabled_group_ids and group_id in background_enabled_group_ids
+                    for group_id in image_enabled_group_ids
+                )
                 card_image_bytes_grayscale = None
+                card_image_bytes_background = None
+                card_image_bytes_grayscale_background = None
 
-                async def render_status_card(avatar_grayscale: bool = False) -> Optional[bytes]:
+                async def render_status_card(
+                    avatar_grayscale: bool = False,
+                    use_background: bool = False,
+                ) -> Optional[bytes]:
                     stopped = action_type == "stop"
+                    background_url = (
+                        build_steam_game_background_url(appid_for_card)
+                        if use_background and appid_for_card
+                        else ""
+                    )
+                    if background_url:
+                        logger.debug(f"Steam 状态卡片使用游戏背景图: appid={appid_for_card}, url={background_url}")
                     card_image = await render_dynamic_steam_card(
                         avatar_url=avatar_url,
                         player_name=res_info['personaname'],
@@ -344,10 +396,17 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
 
                 if should_render_card:
                     try:
-                        if should_render_normal_card:
+                        if should_render_normal_plain_card:
                             card_image_bytes = await render_status_card()
-                        if grayscale_enabled_group_ids:
+                        if should_render_normal_background_card:
+                            card_image_bytes_background = await render_status_card(use_background=True)
+                        if should_render_grayscale_plain_card:
                             card_image_bytes_grayscale = await render_status_card(avatar_grayscale=True)
+                        if should_render_grayscale_background_card:
+                            card_image_bytes_grayscale_background = await render_status_card(
+                                avatar_grayscale=True,
+                                use_background=True,
+                            )
                     except Exception as e:
                         logger.error(f"Steam卡片预渲染失败: {e}")
 
@@ -366,8 +425,14 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                     if target:
                         msg_to_send = None
                         use_image_broadcast = group_id in image_enabled_group_ids
-                        if group_id in grayscale_enabled_group_ids:
+                        use_grayscale = group_id in grayscale_enabled_group_ids
+                        use_background = group_id in background_enabled_group_ids
+                        if use_grayscale and use_background:
+                            card_image_to_send = card_image_bytes_grayscale_background or card_image_bytes_grayscale or card_image_bytes_background or card_image_bytes
+                        elif use_grayscale:
                             card_image_to_send = card_image_bytes_grayscale or card_image_bytes
+                        elif use_background:
+                            card_image_to_send = card_image_bytes_background or card_image_bytes
                         else:
                             card_image_to_send = card_image_bytes
                         if use_image_broadcast and card_image_to_send:
@@ -476,7 +541,9 @@ steam_command_alc = Alconna(
     Option("list", alias=["列表", "绑定列表", "播报列表"], separators="", compact=True),
     Option("播报", Args["status", str], separators="", compact=True),
     Option("图片播报", Args["status", str], separators="", compact=True),
+    Option("图片背景", Args["status", str], alias=["启动图片背景", "开始图片背景", "卡片背景"], separators="", compact=True),
     Option("结束图片播报", Args["status", str], separators="", compact=True),
+    Option("结束图片背景", Args["status", str], separators="", compact=True),
     Option("结束图片黑白", Args["status", str], separators="", compact=True),
     Option("入库播报", Args["status", str], alias=["游戏库播报"], separators="", compact=True),
     Option("墙", Args["user", str], separators="", compact=True),
@@ -549,7 +616,7 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
         await matcher.finish(f"{steam_id} 绑定失败{config_steam.steam_tail_tone}，{e}")
 
     # 更新缓存
-    steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name)
+    steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name, game_id="")
 
     group_list[group_id]["user_list"].append(steam_id)
     if group_list[group_id].get("owned_game", False):
@@ -693,6 +760,18 @@ async def steam_image_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"Steam 图片播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 
+@steam_cmd.assign("图片背景")
+async def steam_image_background_handle(target: MsgTarget, status: Match[str]):
+    if str(status.result) not in ("开启", "关闭"):
+        await UniMessage(f"仅允许设置图片背景开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
+    else:
+        global group_list
+        group_id = ensure_group_data(target)
+        group_list[group_id]["image_background"] = True if str(status.result) == "开启" else False
+        save_data()
+        await UniMessage(f"Steam 图片背景已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
+
+
 @steam_cmd.assign("结束图片播报")
 async def steam_stop_image_handle(target: MsgTarget, status: Match[str]):
     if str(status.result) not in ("开启", "关闭"):
@@ -703,6 +782,18 @@ async def steam_stop_image_handle(target: MsgTarget, status: Match[str]):
         group_list[group_id]["stop_image"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 结束图片播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
+
+
+@steam_cmd.assign("结束图片背景")
+async def steam_stop_image_background_handle(target: MsgTarget, status: Match[str]):
+    if str(status.result) not in ("开启", "关闭"):
+        await UniMessage(f"仅允许设置结束图片背景开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
+    else:
+        global group_list
+        group_id = ensure_group_data(target)
+        group_list[group_id]["stop_image_background"] = True if str(status.result) == "开启" else False
+        save_data()
+        await UniMessage(f"Steam 结束图片背景已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 
 @steam_cmd.assign("结束图片黑白")

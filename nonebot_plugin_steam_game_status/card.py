@@ -492,7 +492,7 @@ async def render_help_card() -> Optional[bytes]:
             template_name="steam_help_card.html",
             templates={},
             pages={
-                "viewport": {"width": 760, "height": 680},
+                "viewport": {"width": 760, "height": 740},
                 "base_url": f"file://{template_path}",
             },
             wait=1,
