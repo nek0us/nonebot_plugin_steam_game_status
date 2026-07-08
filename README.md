@@ -94,6 +94,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_command_priority | 否 | 5 | int | 事件处理函数优先级 |
 | steam_plugin_enabled | 否 | true | bool | 插件全局开关 |
 | steam_tail_tone | 否 | "" | str | bot尾音 |
+| steam_pretty_stop_duration | 否 | true | bool | 停止游戏播报时是否把分钟数格式化为天/小时/分钟，例如 `70 分钟` 显示为 `1小时10分钟` |
 | steam_proxy | 否 | None | str | 代理 |
 | steam_api_proxy | 否 | None | str | Steam API 反代域名 |
 | steam_store_proxy | 否 | None | str | Steam Store 反代域名 |
@@ -121,6 +122,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 
 | 配置项 | 必填 | 默认值 | 类型 | 说明 |
 |:-----:|:----:|:----:|:----:|:----:|
+| steam_card_game_background | 否 | false | bool | 开始/切换游戏状态卡片是否尝试使用当前游戏背景图，并叠加渐变遮罩保证文字可读 |
 | steam_dynamic_avatar_card | 否 | false | bool | 尝试使用 Steam 动态头像资源生成动态 GIF 卡片。默认关闭 |
 | steam_dynamic_card_cache | 否 | true | bool | 动态 GIF 卡片缓存开关 |
 | steam_dynamic_card_preserve_avatar_gif_timing | 否 | true | bool | 生成动态卡片时尽量保留原头像 GIF 的帧数和播放速度 |

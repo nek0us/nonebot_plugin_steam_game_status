@@ -16,8 +16,9 @@ from nonebot.plugin import inherit_supported_adapters
 
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
-from .utils import http_client, driver, HTTPClientSession, to_enum
+from .utils import format_playtime_duration, http_client, driver, HTTPClientSession, to_enum
 from .card import (
+    build_steam_game_background_url,
     render_bind_card,
     render_dynamic_steam_card,
     render_steam_card,
@@ -219,6 +220,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
             action_type = ""
             game_name_for_msg = ""
             action_text_for_card = ""
+            appid_for_card = ""
             game_name_old = ""
             game_time_old = 0
 
@@ -233,6 +235,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                 action_type = "start"
                 game_name_for_msg = game_name
                 action_text_for_card = "开始玩"
+                appid_for_card = str(res_info.get("gameid", ""))
 
             elif "gameextrainfo" in res_info and steam_list[steam_id]["time"] != -1 and steam_list[steam_id][
                 "game_name"] != "":
@@ -248,6 +251,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                     action_type = "switch"
                     game_name_for_msg = game_name
                     action_text_for_card = "开始玩"
+                    appid_for_card = str(res_info.get("gameid", ""))
 
             elif "gameextrainfo" not in res_info and steam_list[steam_id]["game_name"] != "":
                 timestamp = int(time.time() / 60)
@@ -261,7 +265,12 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                 if game_time_old == -1:
                     action_text_for_card = "结束了游戏"
                 else:
-                    action_text_for_card = f"玩了 {game_time} 分钟后停止"
+                    game_time_text = (
+                        format_playtime_duration(game_time)
+                        if config_steam.steam_pretty_stop_duration
+                        else f"{game_time} 分钟"
+                    )
+                    action_text_for_card = f"玩了 {game_time_text} 后停止"
 
             elif "gameextrainfo" in res_info and steam_list[steam_id]["time"] == -1 and steam_list[steam_id][
                 "game_name"] != "":
@@ -277,10 +286,18 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                     action_type = "restart_switch"
                     game_name_for_msg = game_name
                     action_text_for_card = "开始玩"
+                    appid_for_card = str(res_info.get("gameid", ""))
 
             if should_notify:
                 card_image_bytes = None
                 avatar_url = await resolve_avatar_url(steam_id, res_info.get("avatarfull", ""))
+                background_url = (
+                    build_steam_game_background_url(appid_for_card)
+                    if config_steam.steam_card_game_background
+                    else ""
+                )
+                if background_url:
+                    logger.debug(f"Steam 状态卡片使用游戏背景图: appid={appid_for_card}, url={background_url}")
                 image_enabled_group_ids = [
                     group_id
                     for group_id in steam_id_to_groups[steam_id]
@@ -298,14 +315,16 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                             avatar_url=avatar_url,
                             player_name=res_info['personaname'],
                             game_name=game_name_for_msg,
-                            action_text=action_text_for_card
+                            action_text=action_text_for_card,
+                            background_url=background_url,
                         )
                         if not card_image_bytes:
                             card_image_bytes = await render_steam_card(
                                 avatar_url=avatar_url,
                                 player_name=res_info['personaname'],
                                 game_name=game_name_for_msg,
-                                action_text=action_text_for_card
+                                action_text=action_text_for_card,
+                                background_url=background_url,
                             )
                     except Exception as e:
                         logger.error(f"Steam卡片预渲染失败: {e}")
@@ -340,8 +359,13 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                                         f"{name} 不再玩 {game_name_for_msg} 。但{random.choice(bot_name)}忘了，不记得玩了多久了{tone}。")
                                 else:
                                     game_time = int(time.time() / 60) - game_time_old
+                                    game_time_text = (
+                                        format_playtime_duration(game_time)
+                                        if config_steam.steam_pretty_stop_duration
+                                        else f"{game_time} 分钟"
+                                    )
                                     msg_to_send = UniMessage(
-                                        f"{name} 玩了 {game_time} 分钟 {game_name_for_msg} 后不玩了{tone}。")
+                                        f"{name} 玩了 {game_time_text} {game_name_for_msg} 后不玩了{tone}。")
 
                         if msg_to_send:
                             try:

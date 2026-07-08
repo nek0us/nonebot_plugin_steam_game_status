@@ -26,11 +26,25 @@
             overflow: hidden;
         }
 
+        .steam-card.game-bg::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(90deg, rgba(23, 26, 33, 0.94) 0%, rgba(23, 26, 33, 0.80) 42%, rgba(23, 26, 33, 0.34) 78%, rgba(23, 26, 33, 0.08) 100%),
+                var(--game-background-url);
+            background-size: cover;
+            background-position: center right;
+            pointer-events: none;
+            z-index: 0;
+        }
+
 
         .avatar-box {
             position: relative;
             margin-right: 12px;
             flex-shrink: 0;
+            z-index: 2;
         }
 
         .avatar {
@@ -148,7 +162,7 @@
     </style>
 </head>
 <body>
-    <div class="steam-card {{ card_class }}">
+    <div class="steam-card {{ card_class }}" style="{{ background_style }}">
         <div class="bg-watermark">Steam</div>
 
         <div class="avatar-box">

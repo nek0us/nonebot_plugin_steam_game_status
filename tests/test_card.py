@@ -122,9 +122,27 @@ class TestSteamCardCache(unittest.TestCase):
 
         self.assertNotEqual(small_key, large_key)
 
+    def test_cache_key_includes_background_url(self):
+        base = {
+            "avatar_url": "https://example.com/avatar.gif",
+            "player_name": "Alice",
+            "action_text": "start",
+            "game_name": "Game",
+            "template_digest": "template",
+        }
+
+        plain_key = card.build_steam_card_cache_key(background_url="", **base)
+        background_key = card.build_steam_card_cache_key(background_url="https://example.com/bg.jpg", **base)
+
+        self.assertNotEqual(plain_key, background_key)
+
     def test_detects_gif_avatar_url(self):
         self.assertTrue(card.is_animated_image_url("https://example.com/avatar.GIF?size=small"))
         self.assertFalse(card.is_animated_image_url("https://example.com/avatar.jpg"))
+
+    def test_builds_game_background_url(self):
+        self.assertIn("/123/library_hero.jpg", card.build_steam_game_background_url("123"))
+        self.assertEqual(card.build_steam_game_background_url(""), "")
 
     def test_dynamic_card_uses_compact_layout(self):
         card_class, width, height = card.get_steam_card_layout("Game", dynamic=True)

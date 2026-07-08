@@ -21,6 +21,7 @@ STEAM_CARD_COMPACT_VIEWPORT_HEIGHT = 72
 STEAM_CARD_WIDE_VIEWPORT_WIDTH = 406
 STEAM_CARD_WIDE_VIEWPORT_HEIGHT = 88
 STEAM_CARD_LONG_GAME_NAME_LENGTH = 16
+STEAM_GAME_BACKGROUND_URL_TEMPLATE = "https://cdn.akamai.steamstatic.com/steam/apps/{appid}/library_hero.jpg"
 
 
 def get_steam_card_layout(game_name: str, *, dynamic: bool = False) -> tuple[str, int, int]:
@@ -33,6 +34,12 @@ def get_steam_card_layout(game_name: str, *, dynamic: bool = False) -> tuple[str
 
 def is_animated_image_url(url: str) -> bool:
     return urlparse(url).path.lower().endswith(".gif")
+
+
+def build_steam_game_background_url(appid: str) -> str:
+    if not appid:
+        return ""
+    return STEAM_GAME_BACKGROUND_URL_TEMPLATE.format(appid=appid)
 
 
 def build_steam_card_cache_key(
@@ -49,6 +56,7 @@ def build_steam_card_cache_key(
     capture_duration_ms: int = STEAM_CARD_ANIMATION_CAPTURE_DURATION_MS,
     preserve_avatar_timing: bool = False,
     max_avatar_frames: int = 120,
+    background_url: str = "",
 ) -> str:
     cache_data = {
         "avatar_url": avatar_url,
@@ -63,6 +71,7 @@ def build_steam_card_cache_key(
         "capture_duration_ms": capture_duration_ms,
         "preserve_avatar_timing": preserve_avatar_timing,
         "max_avatar_frames": max_avatar_frames,
+        "background_url": background_url,
     }
     cache_json = json.dumps(cache_data, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(cache_json.encode("utf8")).hexdigest()
@@ -76,10 +85,16 @@ def render_steam_card_template(
     action_text: str,
     game_name: str,
     card_class: str = "",
+    background_url: str = "",
 ) -> str:
+    background_style = ""
+    if background_url:
+        background_style = f"--game-background-url: url('{html.escape(background_url, quote=True)}');"
+
     return (
         template_html
         .replace("{{ card_class }}", html.escape(card_class))
+        .replace("{{ background_style }}", background_style)
         .replace("{{ avatar_url }}", html.escape(avatar_url, quote=True))
         .replace("{{ player_name }}", html.escape(player_name))
         .replace("{{ action_text }}", html.escape(action_text))
@@ -87,7 +102,13 @@ def render_steam_card_template(
     )
 
 
-async def render_steam_card(avatar_url: str, player_name: str, game_name: str, action_text: str) -> Optional[bytes]:
+async def render_steam_card(
+    avatar_url: str,
+    player_name: str,
+    game_name: str,
+    action_text: str,
+    background_url: str = "",
+) -> Optional[bytes]:
     from nonebot.log import logger
     from nonebot_plugin_htmlrender import template_to_pic
 
@@ -99,6 +120,11 @@ async def render_steam_card(avatar_url: str, player_name: str, game_name: str, a
             return None
 
         card_class, viewport_width, viewport_height = get_steam_card_layout(game_name)
+        if background_url:
+            card_class = f"{card_class} game-bg".strip()
+        background_style = ""
+        if background_url:
+            background_style = f"--game-background-url: url('{html.escape(background_url, quote=True)}');"
         pic_data = await template_to_pic(
             template_path=template_path,
             template_name="steam_card.html",
@@ -108,6 +134,7 @@ async def render_steam_card(avatar_url: str, player_name: str, game_name: str, a
                 "player_name": player_name,
                 "action_text": action_text,
                 "game_name": game_name,
+                "background_style": background_style,
             },
             pages={
                 "viewport": {"width": viewport_width, "height": viewport_height},
@@ -194,6 +221,7 @@ async def _render_dynamic_steam_card_with_avatar_frames(
     card_class: str,
     viewport_width: int,
     viewport_height: int,
+    background_url: str,
 ) -> Optional[bytes]:
     from .config import config_steam
     from .utils import playwright_context
@@ -205,6 +233,7 @@ async def _render_dynamic_steam_card_with_avatar_frames(
         action_text=action_text,
         game_name=game_name,
         card_class=card_class,
+        background_url=background_url,
     )
 
     card_frames = []
@@ -254,6 +283,7 @@ async def render_dynamic_steam_card(
     player_name: str,
     game_name: str,
     action_text: str,
+    background_url: str = "",
 ) -> Optional[bytes]:
     from nonebot.log import logger
 
@@ -274,6 +304,8 @@ async def render_dynamic_steam_card(
         template_html = template_file.read_text("utf8")
         template_digest = hashlib.sha256(template_html.encode("utf8")).hexdigest()
         card_class, viewport_width, viewport_height = get_steam_card_layout(game_name, dynamic=True)
+        if background_url:
+            card_class = f"{card_class} game-bg".strip()
         if config_steam.steam_dynamic_card_capture_duration_ms > 0:
             frame_count = max(
                 config_steam.steam_dynamic_card_frame_count,
@@ -307,6 +339,7 @@ async def render_dynamic_steam_card(
             capture_duration_ms=config_steam.steam_dynamic_card_capture_duration_ms,
             preserve_avatar_timing=preserve_avatar_timing,
             max_avatar_frames=config_steam.steam_dynamic_card_max_avatar_frames,
+            background_url=background_url,
         )
         cache_file = dynamic_card_cache_dir / f"{cache_key}.gif"
         if config_steam.steam_dynamic_card_cache and cache_file.exists():
@@ -325,6 +358,7 @@ async def render_dynamic_steam_card(
                     card_class=card_class,
                     viewport_width=viewport_width,
                     viewport_height=viewport_height,
+                    background_url=background_url,
                 )
                 if gif_data:
                     if config_steam.steam_dynamic_card_cache:
@@ -341,6 +375,7 @@ async def render_dynamic_steam_card(
             action_text=action_text,
             game_name=game_name,
             card_class=card_class,
+            background_url=background_url,
         )
         frames = []
         async with playwright_context() as pc:

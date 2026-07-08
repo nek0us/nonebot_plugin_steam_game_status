@@ -23,11 +23,13 @@ class Config(BaseModel):
     steam_area_game: Union[bool, List[str]]= False
     steam_link_r18_game: Union[bool, List[str]] = False
     steam_tail_tone: str = ""
+    steam_pretty_stop_duration: bool = True
     steam_subscribe_time: Union[str, List[str]] = ["08:00"]
     steam_status_query_concurrency: int = 6
     steam_owned_game_interval: int = 60
     steam_owned_game_query_concurrency: int = 5
     steam_owned_game_baseline_concurrency: int = 5
+    steam_card_game_background: bool = False
     steam_dynamic_avatar_card: bool = False
     steam_dynamic_card_cache: bool = True
     steam_dynamic_card_preserve_avatar_gif_timing: bool = True
@@ -153,6 +155,12 @@ class Config(BaseModel):
         else:
             logger.success("steam_tail_tone未配置")
         return v
+
+    @validator("steam_pretty_stop_duration")
+    def check_pretty_stop_duration(cls, v: bool) -> bool:
+        if v:
+            logger.info("steam_pretty_stop_duration 已开启，停止播报将使用天/小时/分钟格式")
+        return v
         
     @validator("steam_subscribe_time")
     def check_subscribe_time(cls,v: Union[str, List[str]]) -> List[str]:
@@ -182,6 +190,12 @@ class Config(BaseModel):
     def check_dynamic_avatar_card(cls, v: bool) -> bool:
         if v:
             logger.info("steam_dynamic_avatar_card 已开启，将尝试生成动态头像卡片")
+        return v
+
+    @validator("steam_card_game_background")
+    def check_card_game_background(cls, v: bool) -> bool:
+        if v:
+            logger.info("steam_card_game_background 已开启，状态卡片将尝试使用游戏背景图")
         return v
 
     @validator("steam_dynamic_card_cache")
