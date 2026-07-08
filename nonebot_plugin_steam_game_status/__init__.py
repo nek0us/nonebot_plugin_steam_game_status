@@ -16,7 +16,8 @@ from nonebot.plugin import inherit_supported_adapters
 
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
-from .utils import format_playtime_duration, http_client, driver, HTTPClientSession, to_enum
+from .duration import format_playtime_duration
+from .utils import http_client, driver, HTTPClientSession, to_enum
 from .card import (
     build_steam_game_background_url,
     render_bind_card,

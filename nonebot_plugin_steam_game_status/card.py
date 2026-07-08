@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import hashlib
 import html
 import io
@@ -6,8 +8,6 @@ import base64
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
-
-from PIL import Image as PILImage, ImageSequence
 
 
 STEAM_CARD_ANIMATION_FRAME_COUNT = 12
@@ -176,6 +176,7 @@ def _limit_avatar_gif_frames(
 async def _download_avatar_gif_frames(avatar_url: str) -> Optional[list[tuple[PILImage.Image, int]]]:
     from nonebot.internal.driver import Request
     from nonebot.log import logger
+    from PIL import Image as PILImage, ImageSequence
 
     from .config import config_steam
     from .model import SafeResponse
@@ -223,6 +224,8 @@ async def _render_dynamic_steam_card_with_avatar_frames(
     viewport_height: int,
     background_url: str,
 ) -> Optional[bytes]:
+    from PIL import Image as PILImage
+
     from .config import config_steam
     from .utils import playwright_context
 
@@ -295,6 +298,8 @@ async def render_dynamic_steam_card(
         return None
 
     try:
+        from PIL import Image as PILImage
+
         template_path = Path(__file__).parent / "templates"
         template_file = template_path / "steam_card.html"
         if not template_file.exists():
