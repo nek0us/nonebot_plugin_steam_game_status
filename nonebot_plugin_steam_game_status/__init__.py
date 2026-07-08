@@ -99,7 +99,7 @@ __plugin_meta__ = PluginMetadata(
             steam图片背景开启/steam图片背景关闭
             steam结束图片播报开启/steam结束图片播报关闭
             steam结束图片背景开启/steam结束图片背景关闭
-            steam结束图片黑白开启/steam结束图片黑白关闭
+            steam结束头像黑白开启/steam结束头像黑白关闭
             steam结束背景黑白开启/steam结束背景黑白关闭
                 默认开始/切换游戏使用图片播报，结束游戏使用文字播报。
             steam入库播报开启/steam入库播报关闭
@@ -572,7 +572,7 @@ steam_command_alc = Alconna(
     Option("图片背景", Args["status", str], alias=["启动图片背景", "开始图片背景", "卡片背景"], separators="", compact=True),
     Option("结束图片播报", Args["status", str], separators="", compact=True),
     Option("结束图片背景", Args["status", str], separators="", compact=True),
-    Option("结束图片黑白", Args["status", str], separators="", compact=True),
+    Option("结束头像黑白", Args["status", str], alias=["结束图片黑白"], separators="", compact=True),
     Option("结束背景黑白", Args["status", str], alias=["结束图片背景黑白"], separators="", compact=True),
     Option("入库播报", Args["status", str], alias=["游戏库播报"], separators="", compact=True),
     Option("墙", Args["user", str], separators="", compact=True),
@@ -825,16 +825,16 @@ async def steam_stop_image_background_handle(target: MsgTarget, status: Match[st
         await UniMessage(f"Steam 结束图片背景已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 
-@steam_cmd.assign("结束图片黑白")
+@steam_cmd.assign("结束头像黑白")
 async def steam_stop_image_grayscale_handle(target: MsgTarget, status: Match[str]):
     if str(status.result) not in ("开启", "关闭"):
-        await UniMessage(f"仅允许设置结束图片黑白开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
+        await UniMessage(f"仅允许设置结束头像黑白开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
         group_id = ensure_group_data(target)
         group_list[group_id]["stop_image_grayscale"] = True if str(status.result) == "开启" else False
         save_data()
-        await UniMessage(f"Steam 结束图片黑白已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
+        await UniMessage(f"Steam 结束头像黑白已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 
 @steam_cmd.assign("结束背景黑白")
