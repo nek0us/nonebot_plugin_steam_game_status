@@ -113,6 +113,7 @@ async def render_steam_card(
     action_text: str,
     background_url: str = "",
     avatar_grayscale: bool = False,
+    background_grayscale: bool = False,
     stopped: bool = False,
 ) -> Optional[bytes]:
     from nonebot.log import logger
@@ -128,6 +129,8 @@ async def render_steam_card(
         card_class, viewport_width, viewport_height = get_steam_card_layout(game_name)
         if background_url:
             card_class = _append_card_class(card_class, "game-bg")
+            if background_grayscale:
+                card_class = _append_card_class(card_class, "grayscale-background")
         if stopped:
             card_class = _append_card_class(card_class, "stopped")
         if avatar_grayscale:
@@ -298,6 +301,7 @@ async def render_dynamic_steam_card(
     action_text: str,
     background_url: str = "",
     avatar_grayscale: bool = False,
+    background_grayscale: bool = False,
     stopped: bool = False,
 ) -> Optional[bytes]:
     from nonebot.log import logger
@@ -323,6 +327,8 @@ async def render_dynamic_steam_card(
         card_class, viewport_width, viewport_height = get_steam_card_layout(game_name, dynamic=True)
         if background_url:
             card_class = _append_card_class(card_class, "game-bg")
+            if background_grayscale:
+                card_class = _append_card_class(card_class, "grayscale-background")
         if stopped:
             card_class = _append_card_class(card_class, "stopped")
         if avatar_grayscale:
@@ -492,7 +498,7 @@ async def render_help_card() -> Optional[bytes]:
             template_name="steam_help_card.html",
             templates={},
             pages={
-                "viewport": {"width": 760, "height": 740},
+                "viewport": {"width": 760, "height": 780},
                 "base_url": f"file://{template_path}",
             },
             wait=1,

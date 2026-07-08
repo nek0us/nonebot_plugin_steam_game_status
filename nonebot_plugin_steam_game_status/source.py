@@ -230,13 +230,16 @@ steam_group_card_background_26_07_08: Dict[str, GroupDataNew] = json.loads(new_f
 value_card_background_26_07_08 = next(iter(steam_group_card_background_26_07_08.values()), None)
 if value_card_background_26_07_08:
     if any(
-        "image_background" not in group_data or "stop_image_background" not in group_data
+        "image_background" not in group_data
+        or "stop_image_background" not in group_data
+        or "stop_image_background_grayscale" not in group_data
         for group_data in steam_group_card_background_26_07_08.values()
     ):
         steam_group_card_background_dict_26_07_08 = {}
         for group_id, group_data in steam_group_card_background_26_07_08.items():
             group_data.setdefault("image_background", True)
             group_data.setdefault("stop_image_background", False)
+            group_data.setdefault("stop_image_background_grayscale", False)
             steam_group_card_background_dict_26_07_08[group_id] = group_data
         new_file_group.write_text(json.dumps(steam_group_card_background_dict_26_07_08))
         logger.success("steam 0.4.0 26.07.08 状态卡片背景群开关数据更新成功")

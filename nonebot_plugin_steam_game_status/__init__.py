@@ -99,6 +99,7 @@ __plugin_meta__ = PluginMetadata(
             steam结束图片播报开启/steam结束图片播报关闭
             steam结束图片背景开启/steam结束图片背景关闭
             steam结束图片黑白开启/steam结束图片黑白关闭
+            steam结束背景黑白开启/steam结束背景黑白关闭
                 默认开始/切换游戏使用图片播报，结束游戏使用文字播报。
             steam入库播报开启/steam入库播报关闭
                 默认关闭。按 steam_owned_game_interval 检查公开游戏库，只播报新增游戏。
@@ -353,17 +354,32 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                     group_id in grayscale_enabled_group_ids and group_id not in background_enabled_group_ids
                     for group_id in image_enabled_group_ids
                 )
+                background_grayscale_enabled_group_ids = [
+                    group_id
+                    for group_id in image_enabled_group_ids
+                    if (
+                        action_type == "stop"
+                        and group_id in grayscale_enabled_group_ids
+                        and group_id in background_enabled_group_ids
+                        and group_list.get(str(group_id), {}).get("stop_image_background_grayscale", False)
+                    )
+                ]
                 should_render_grayscale_background_card = any(
-                    group_id in grayscale_enabled_group_ids and group_id in background_enabled_group_ids
+                    group_id in grayscale_enabled_group_ids
+                    and group_id in background_enabled_group_ids
+                    and group_id not in background_grayscale_enabled_group_ids
                     for group_id in image_enabled_group_ids
                 )
+                should_render_grayscale_gray_background_card = bool(background_grayscale_enabled_group_ids)
                 card_image_bytes_grayscale = None
                 card_image_bytes_background = None
                 card_image_bytes_grayscale_background = None
+                card_image_bytes_grayscale_gray_background = None
 
                 async def render_status_card(
                     avatar_grayscale: bool = False,
                     use_background: bool = False,
+                    background_grayscale: bool = False,
                 ) -> Optional[bytes]:
                     stopped = action_type == "stop"
                     background_url = (
@@ -380,6 +396,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                         action_text=action_text_for_card,
                         background_url=background_url,
                         avatar_grayscale=avatar_grayscale,
+                        background_grayscale=background_grayscale,
                         stopped=stopped,
                     )
                     if not card_image:
@@ -390,6 +407,7 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                             action_text=action_text_for_card,
                             background_url=background_url,
                             avatar_grayscale=avatar_grayscale,
+                            background_grayscale=background_grayscale,
                             stopped=stopped,
                         )
                     return card_image
@@ -406,6 +424,12 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                             card_image_bytes_grayscale_background = await render_status_card(
                                 avatar_grayscale=True,
                                 use_background=True,
+                            )
+                        if should_render_grayscale_gray_background_card:
+                            card_image_bytes_grayscale_gray_background = await render_status_card(
+                                avatar_grayscale=True,
+                                use_background=True,
+                                background_grayscale=True,
                             )
                     except Exception as e:
                         logger.error(f"Steam卡片预渲染失败: {e}")
@@ -427,7 +451,10 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                         use_image_broadcast = group_id in image_enabled_group_ids
                         use_grayscale = group_id in grayscale_enabled_group_ids
                         use_background = group_id in background_enabled_group_ids
-                        if use_grayscale and use_background:
+                        use_background_grayscale = group_id in background_grayscale_enabled_group_ids
+                        if use_grayscale and use_background and use_background_grayscale:
+                            card_image_to_send = card_image_bytes_grayscale_gray_background or card_image_bytes_grayscale_background or card_image_bytes_grayscale or card_image_bytes_background or card_image_bytes
+                        elif use_grayscale and use_background:
                             card_image_to_send = card_image_bytes_grayscale_background or card_image_bytes_grayscale or card_image_bytes_background or card_image_bytes
                         elif use_grayscale:
                             card_image_to_send = card_image_bytes_grayscale or card_image_bytes
@@ -545,6 +572,7 @@ steam_command_alc = Alconna(
     Option("结束图片播报", Args["status", str], separators="", compact=True),
     Option("结束图片背景", Args["status", str], separators="", compact=True),
     Option("结束图片黑白", Args["status", str], separators="", compact=True),
+    Option("结束背景黑白", Args["status", str], alias=["结束图片背景黑白"], separators="", compact=True),
     Option("入库播报", Args["status", str], alias=["游戏库播报"], separators="", compact=True),
     Option("墙", Args["user", str], separators="", compact=True),
     Option("喜加一", Args["action", Optional[Literal["订阅", "退订"]]], separators="", compact=True),
@@ -806,6 +834,18 @@ async def steam_stop_image_grayscale_handle(target: MsgTarget, status: Match[str
         group_list[group_id]["stop_image_grayscale"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 结束图片黑白已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
+
+
+@steam_cmd.assign("结束背景黑白")
+async def steam_stop_background_grayscale_handle(target: MsgTarget, status: Match[str]):
+    if str(status.result) not in ("开启", "关闭"):
+        await UniMessage(f"仅允许设置结束背景黑白开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
+    else:
+        global group_list
+        group_id = ensure_group_data(target)
+        group_list[group_id]["stop_image_background_grayscale"] = True if str(status.result) == "开启" else False
+        save_data()
+        await UniMessage(f"Steam 结束背景黑白已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
 
 @steam_cmd.assign("入库播报")

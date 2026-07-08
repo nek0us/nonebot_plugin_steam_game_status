@@ -30,6 +30,7 @@ class GroupDataNew(GroupData3):
     stop_image: bool
     stop_image_background: bool
     stop_image_grayscale: bool
+    stop_image_background_grayscale: bool
     owned_game: bool
 
 def create_group_data(
@@ -42,6 +43,7 @@ def create_group_data(
         stop_image: bool = False,
         stop_image_background: bool = False,
         stop_image_grayscale: bool = False,
+        stop_image_background_grayscale: bool = False,
         owned_game: bool = False,
         ) -> GroupDataNew:
     '''创建数据结构统一为函数调用'''
@@ -55,6 +57,7 @@ def create_group_data(
         stop_image=stop_image,
         stop_image_background=stop_image_background,
         stop_image_grayscale=stop_image_grayscale,
+        stop_image_background_grayscale=stop_image_background_grayscale,
         owned_game=owned_game,
     )
 
