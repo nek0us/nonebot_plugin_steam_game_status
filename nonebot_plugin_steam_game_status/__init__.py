@@ -347,33 +347,42 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                     group_id not in grayscale_enabled_group_ids and group_id not in background_enabled_group_ids
                     for group_id in image_enabled_group_ids
                 )
+                background_grayscale_enabled_group_ids = [
+                    group_id
+                    for group_id in image_enabled_group_ids
+                    if (
+                        action_type == "stop"
+                        and group_id in background_enabled_group_ids
+                        and group_list.get(str(group_id), {}).get("stop_image_background_grayscale", False)
+                    )
+                ]
                 should_render_normal_background_card = any(
-                    group_id not in grayscale_enabled_group_ids and group_id in background_enabled_group_ids
+                    group_id not in grayscale_enabled_group_ids
+                    and group_id in background_enabled_group_ids
+                    and group_id not in background_grayscale_enabled_group_ids
+                    for group_id in image_enabled_group_ids
+                )
+                should_render_normal_gray_background_card = any(
+                    group_id not in grayscale_enabled_group_ids and group_id in background_grayscale_enabled_group_ids
                     for group_id in image_enabled_group_ids
                 )
                 should_render_grayscale_plain_card = any(
                     group_id in grayscale_enabled_group_ids and group_id not in background_enabled_group_ids
                     for group_id in image_enabled_group_ids
                 )
-                background_grayscale_enabled_group_ids = [
-                    group_id
-                    for group_id in image_enabled_group_ids
-                    if (
-                        action_type == "stop"
-                        and group_id in grayscale_enabled_group_ids
-                        and group_id in background_enabled_group_ids
-                        and group_list.get(str(group_id), {}).get("stop_image_background_grayscale", False)
-                    )
-                ]
                 should_render_grayscale_background_card = any(
                     group_id in grayscale_enabled_group_ids
                     and group_id in background_enabled_group_ids
                     and group_id not in background_grayscale_enabled_group_ids
                     for group_id in image_enabled_group_ids
                 )
-                should_render_grayscale_gray_background_card = bool(background_grayscale_enabled_group_ids)
+                should_render_grayscale_gray_background_card = any(
+                    group_id in grayscale_enabled_group_ids and group_id in background_grayscale_enabled_group_ids
+                    for group_id in image_enabled_group_ids
+                )
                 card_image_bytes_grayscale = None
                 card_image_bytes_background = None
+                card_image_bytes_gray_background = None
                 card_image_bytes_grayscale_background = None
                 card_image_bytes_grayscale_gray_background = None
 
@@ -419,6 +428,11 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                             card_image_bytes = await render_status_card()
                         if should_render_normal_background_card:
                             card_image_bytes_background = await render_status_card(use_background=True)
+                        if should_render_normal_gray_background_card:
+                            card_image_bytes_gray_background = await render_status_card(
+                                use_background=True,
+                                background_grayscale=True,
+                            )
                         if should_render_grayscale_plain_card:
                             card_image_bytes_grayscale = await render_status_card(avatar_grayscale=True)
                         if should_render_grayscale_background_card:
@@ -454,9 +468,27 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                         use_background = group_id in background_enabled_group_ids
                         use_background_grayscale = group_id in background_grayscale_enabled_group_ids
                         if use_grayscale and use_background and use_background_grayscale:
-                            card_image_to_send = card_image_bytes_grayscale_gray_background or card_image_bytes_grayscale_background or card_image_bytes_grayscale or card_image_bytes_background or card_image_bytes
+                            card_image_to_send = (
+                                card_image_bytes_grayscale_gray_background
+                                or card_image_bytes_grayscale_background
+                                or card_image_bytes_gray_background
+                                or card_image_bytes_grayscale
+                                or card_image_bytes_background
+                                or card_image_bytes
+                            )
                         elif use_grayscale and use_background:
-                            card_image_to_send = card_image_bytes_grayscale_background or card_image_bytes_grayscale or card_image_bytes_background or card_image_bytes
+                            card_image_to_send = (
+                                card_image_bytes_grayscale_background
+                                or card_image_bytes_grayscale
+                                or card_image_bytes_background
+                                or card_image_bytes
+                            )
+                        elif use_background and use_background_grayscale:
+                            card_image_to_send = (
+                                card_image_bytes_gray_background
+                                or card_image_bytes_background
+                                or card_image_bytes
+                            )
                         elif use_grayscale:
                             card_image_to_send = card_image_bytes_grayscale or card_image_bytes
                         elif use_background:
