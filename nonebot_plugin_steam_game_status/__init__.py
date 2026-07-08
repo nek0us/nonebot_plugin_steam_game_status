@@ -541,8 +541,14 @@ steam_cmd = on_alconna(steam_command_alc, priority=config_steam.steam_command_pr
 
 def ensure_group_data(target: MsgTarget) -> str:
     group_id = str(target.id)
+    adapter = to_enum(target.adapter).value if target.adapter else ""
     if group_id not in group_list:
-        group_list[group_id] = create_group_data(adapter=to_enum(target.adapter).value if target.adapter else "")
+        group_list[group_id] = create_group_data(adapter=adapter)
+    else:
+        group_data = group_list[group_id]
+        defaults = create_group_data(adapter=group_data.get("adapter") or adapter)
+        for key, value in defaults.items():
+            group_data.setdefault(key, value)
     if group_id not in exclude_game:
         exclude_game[group_id] = list(exclude_game_default)
     return group_id
@@ -659,15 +665,17 @@ async def steam_del_handle(target: MsgTarget, matcher: Matcher, id: Match[str]):
     steam_name: str = ""
     global group_list
 
-    if str(target.id) not in group_list:
+    group_id = str(target.id)
+    if group_id not in group_list:
         await matcher.finish(f"本群不存在 Steam 绑定记录{config_steam.steam_tail_tone}")
+    ensure_group_data(target)
 
-    if steam_id not in group_list[str(target.id)]["user_list"]:
+    if steam_id not in group_list[group_id]["user_list"]:
         await matcher.finish(f"本群尚未绑定该 Steam ID{config_steam.steam_tail_tone}")
     steam_name = steam_list[steam_id]["nickname"]
 
     try:
-        group_list[str(target.id)]["user_list"].remove(steam_id)
+        group_list[group_id]["user_list"].remove(steam_id)
     except Exception as e:
         logger.debug(f"删除steam id 失败，输入值：{steam_id}，错误：{e.args}")
         await matcher.finish(f"没有找到 Steam ID：{steam_id}{config_steam.steam_tail_tone}")
@@ -726,6 +734,7 @@ async def steam_exclude_list_handle(target: MsgTarget):
 
 @steam_cmd.assign("list")
 async def steam_bind_list_handle(target: MsgTarget):
+    group_id = ensure_group_data(target)
     try:
         nodes = [
             CustomNode(
@@ -734,7 +743,7 @@ async def steam_bind_list_handle(target: MsgTarget):
                 content=UniMessage.text(
                     f"Steam ID：{steam_id}\n昵称：{steam_list[steam_id]['nickname']}\n{'正在玩：' + steam_list[steam_id]['game_name'] if steam_list[steam_id]['game_name'] != '' else ''}")
             )
-            for index, steam_id in enumerate(group_list[str(target.id)]["user_list"])
+            for index, steam_id in enumerate(group_list[group_id]["user_list"])
         ]
         await UniMessage(Reference(nodes=nodes)).send()
     except Exception as e:
