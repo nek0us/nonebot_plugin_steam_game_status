@@ -22,6 +22,7 @@ from .card import (
     build_steam_game_background_url,
     render_bind_card,
     render_dynamic_steam_card,
+    render_help_card,
     render_steam_card,
 )
 from .avatar import resolve_avatar_url
@@ -102,6 +103,7 @@ __plugin_meta__ = PluginMetadata(
             steam喜加一
             steam喜加一订阅
             steam喜加一退订
+            steam帮助
 
         链接识别：
             从商店复制链接
@@ -476,6 +478,7 @@ steam_command_alc = Alconna(
     Option("入库播报", Args["status", str], alias=["游戏库播报"], separators="", compact=True),
     Option("墙", Args["user", str], separators="", compact=True),
     Option("喜加一", Args["action", Optional[Literal["订阅", "退订"]]], separators="", compact=True),
+    Option("帮助", alias=["help", "菜单", ".help"], separators="", compact=True),
     Option("失联群列表", separators="", compact=True),
     Option("失联群清理", separators="", compact=True),
     separators="",
@@ -747,6 +750,23 @@ async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[s
     res = await get_free_games_info(target)
     if res:
         await matcher.finish(res)
+
+
+@steam_cmd.assign("帮助")
+async def steam_help_handle(matcher: Matcher):
+    help_img = await render_help_card()
+    if help_img:
+        await matcher.finish(UniMessage.image(raw=help_img))
+
+    await matcher.finish(
+        "Steam 游戏状态帮助\n"
+        "常用：steam绑定、steam解绑、steam列表\n"
+        "播报：steam播报 开启/关闭、steam图片播报 开启/关闭、steam结束图片播报 开启/关闭\n"
+        "屏蔽：steam屏蔽 游戏名、steam恢复 游戏名、steam排除列表\n"
+        "入库：steam入库播报 开启/关闭\n"
+        "订阅：steam喜加一、steam喜加一 订阅/退订、steam打折订阅 appid\n"
+        "工具：steam墙 7656..."
+    )
 
 
 @steam_cmd.assign("墙")

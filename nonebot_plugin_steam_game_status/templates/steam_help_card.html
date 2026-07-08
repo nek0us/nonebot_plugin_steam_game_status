@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: #171a21;
+            font-family: "Microsoft YaHei", "Arial", sans-serif;
+            width: fit-content;
+        }
+
+        .help-card {
+            box-sizing: border-box;
+            width: 760px;
+            padding: 24px;
+            background: linear-gradient(135deg, #171a21 0%, #1b2838 48%, #20384c 100%);
+            border: 1px solid #2a475e;
+            border-radius: 8px;
+            color: #c6d4df;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .help-card::before {
+            content: "Steam";
+            position: absolute;
+            right: -18px;
+            bottom: -34px;
+            color: rgba(255, 255, 255, 0.035);
+            font-size: 144px;
+            font-weight: 800;
+            transform: rotate(-8deg);
+            pointer-events: none;
+        }
+
+        .header {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            margin-bottom: 18px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .title {
+            color: #66c0f4;
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .subtitle {
+            color: #8f98a0;
+            font-size: 13px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section {
+            border: 1px solid rgba(102, 192, 244, 0.18);
+            border-radius: 6px;
+            padding: 14px;
+            background: rgba(0, 0, 0, 0.18);
+        }
+
+        .section-title {
+            color: #90ba3c;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .item {
+            display: grid;
+            grid-template-columns: 190px 1fr;
+            gap: 10px;
+            align-items: start;
+            padding: 6px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .item:first-of-type {
+            border-top: 0;
+            padding-top: 0;
+        }
+
+        .cmd {
+            color: #ffffff;
+            font-size: 13px;
+            font-family: "Consolas", "Microsoft YaHei", monospace;
+            white-space: nowrap;
+        }
+
+        .desc {
+            color: #acb9c3;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .footer {
+            margin-top: 16px;
+            color: #8f98a0;
+            font-size: 12px;
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="help-card">
+        <div class="header">
+            <div class="title">Steam 游戏状态帮助</div>
+            <div class="subtitle">群内命令速查</div>
+        </div>
+
+        <div class="grid">
+            <div class="section">
+                <div class="section-title">常用</div>
+                <div class="item">
+                    <div class="cmd">steam绑定 7656...</div>
+                    <div class="desc">绑定 Steam ID64 或好友代码</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam解绑 7656...</div>
+                    <div class="desc">删除本群绑定的 Steam ID</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam列表</div>
+                    <div class="desc">查看本群绑定列表和当前游戏状态</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">商店链接</div>
+                    <div class="desc">发送 Steam 商店链接可查看游戏信息</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">播报设置</div>
+                <div class="item">
+                    <div class="cmd">steam播报 开启/关闭</div>
+                    <div class="desc">设置本群是否播报游戏状态</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam图片播报 开启/关闭</div>
+                    <div class="desc">设置开始/切换游戏是否使用图片卡片</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam结束图片播报 开启/关闭</div>
+                    <div class="desc">设置结束游戏是否使用图片卡片</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam结束图片黑白 开启/关闭</div>
+                    <div class="desc">结束游戏图片卡片头像是否置灰</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">屏蔽与入库</div>
+                <div class="item">
+                    <div class="cmd">steam屏蔽 游戏名</div>
+                    <div class="desc">本群不再播报该游戏</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam恢复 游戏名</div>
+                    <div class="desc">恢复该游戏的状态播报</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam排除列表</div>
+                    <div class="desc">查看本群屏蔽游戏列表</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam入库播报 开启/关闭</div>
+                    <div class="desc">检查公开游戏库新增游戏，开启时先建立基准</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">订阅与工具</div>
+                <div class="item">
+                    <div class="cmd">steam喜加一</div>
+                    <div class="desc">主动查看当前免费领取资讯</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam喜加一 订阅/退订</div>
+                    <div class="desc">设置本群喜加一推送</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam打折订阅 appid</div>
+                    <div class="desc">订阅指定游戏的折扣提醒</div>
+                </div>
+                <div class="item">
+                    <div class="cmd">steam墙 7656...</div>
+                    <div class="desc">生成玩家游戏时长拼图</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">提示：如果机器人配置了命令前缀，请在 steam 前加上对应前缀。</div>
+    </div>
+</body>
+</html>

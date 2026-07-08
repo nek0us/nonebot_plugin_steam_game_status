@@ -468,3 +468,29 @@ async def render_bind_card(avatar_url: str, player_name: str, steam_id: str) -> 
     except Exception as e:
         logger.error(f"渲染 Steam 绑定卡片失败: {e}")
         return None
+
+
+async def render_help_card() -> Optional[bytes]:
+    from nonebot.log import logger
+    from nonebot_plugin_htmlrender import template_to_pic
+
+    try:
+        template_path = str(Path(__file__).parent / "templates")
+
+        if not (Path(__file__).parent / "templates" / "steam_help_card.html").exists():
+            logger.warning("Steam帮助模板文件 steam_help_card.html 不存在，跳过渲染")
+            return None
+
+        return await template_to_pic(
+            template_path=template_path,
+            template_name="steam_help_card.html",
+            templates={},
+            pages={
+                "viewport": {"width": 760, "height": 680},
+                "base_url": f"file://{template_path}",
+            },
+            wait=1,
+        )
+    except Exception as e:
+        logger.error(f"渲染 Steam 帮助卡片失败: {e}")
+        return None
