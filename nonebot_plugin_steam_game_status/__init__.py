@@ -25,7 +25,7 @@ from .card import (
     render_help_card,
     render_steam_card,
 )
-from .avatar import resolve_avatar_url
+from .avatar import normalize_steam_avatar_url, resolve_avatar_url
 from .model import UserData, SafeResponse, create_group_data
 from .config import Config, __version__, config_steam, bot_name, get_steam_api_domain
 from .api import (
@@ -635,8 +635,8 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
                 logger.debug(f"{steam_id} 绑定失败，查无此人，请检查输入的id")
                 await matcher.finish(f"{steam_id} 绑定失败，查无此人，请检查输入的id{config_steam.steam_tail_tone}")
 
-            steam_name = players[0]['personaname']
-            avatar_url = await resolve_avatar_url(steam_id, players[0].get('avatarfull', ''))
+            steam_name = players[0]["personaname"]
+            avatar_url = normalize_steam_avatar_url(players[0].get("avatarfull", ""))
 
     except MatcherException:
         raise
