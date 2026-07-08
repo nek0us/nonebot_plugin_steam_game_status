@@ -5,6 +5,7 @@ import random
 import asyncio
 import io
 import hashlib
+import base64
 from pathlib import Path
 
 from typing import Dict, List, Optional, Literal
@@ -72,7 +73,7 @@ from nonebot_plugin_apscheduler import scheduler  # noqa: E402
 require("nonebot_plugin_htmlrender")
 from nonebot_plugin_htmlrender import template_to_pic  # noqa: E402
 
-from PIL import Image as PILImage  # noqa: E402
+from PIL import Image as PILImage, ImageSequence  # noqa: E402
 
 dynamic_avatar_url_cache: Dict[str, tuple[float, Optional[str]]] = {}
 
@@ -160,6 +161,124 @@ async def render_steam_card(avatar_url: str, player_name: str, game_name: str, a
         return None
 
 
+def _image_to_png_data_url(image: PILImage.Image) -> str:
+    output = io.BytesIO()
+    image.save(output, format="PNG")
+    encoded = base64.b64encode(output.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def _limit_avatar_gif_frames(
+    frames: List[tuple[PILImage.Image, int]],
+    max_frames: int,
+) -> List[tuple[PILImage.Image, int]]:
+    if max_frames <= 0 or len(frames) <= max_frames:
+        return frames
+
+    limited_frames = []
+    for index in range(max_frames):
+        start = round(index * len(frames) / max_frames)
+        end = round((index + 1) * len(frames) / max_frames)
+        if end <= start:
+            end = start + 1
+        duration = sum(frame_duration for _, frame_duration in frames[start:end])
+        limited_frames.append((frames[start][0], duration))
+    return limited_frames
+
+
+async def _download_avatar_gif_frames(avatar_url: str) -> Optional[List[tuple[PILImage.Image, int]]]:
+    try:
+        async with http_client() as client:
+            res = SafeResponse(await client.request(Request("GET", avatar_url, timeout=30)))
+    except Exception as e:
+        logger.debug(f"Steam 动态头像 GIF 下载异常，跳过保留原时序模式：{e.args}")
+        return None
+
+    if res.status_code != 200 or not isinstance(res.content, bytes):
+        logger.debug(f"Steam 动态头像 GIF 下载失败，状态码:{res.status_code}")
+        return None
+
+    try:
+        avatar_gif = PILImage.open(io.BytesIO(res.content))
+    except Exception as e:
+        logger.debug(f"Steam 动态头像 GIF 读取失败，跳过保留原时序模式：{e.args}")
+        return None
+
+    if not getattr(avatar_gif, "is_animated", False):
+        return None
+
+    frames = []
+    for frame in ImageSequence.Iterator(avatar_gif):
+        duration = int(frame.info.get("duration") or 100)
+        frames.append((frame.copy().convert("RGBA"), max(20, duration)))
+
+    if not frames:
+        return None
+    return _limit_avatar_gif_frames(frames, config_steam.steam_dynamic_card_max_avatar_frames)
+
+
+async def _render_dynamic_steam_card_with_avatar_frames(
+    *,
+    template_html: str,
+    avatar_frames: List[tuple[PILImage.Image, int]],
+    player_name: str,
+    game_name: str,
+    action_text: str,
+    card_class: str,
+    viewport_width: int,
+    viewport_height: int,
+) -> Optional[bytes]:
+    html_content = render_steam_card_template(
+        template_html=template_html,
+        avatar_url=_image_to_png_data_url(avatar_frames[0][0]),
+        player_name=player_name,
+        action_text=action_text,
+        game_name=game_name,
+        card_class=card_class,
+    )
+
+    card_frames = []
+    async with playwright_context() as pc:
+        page = await pc.new_page()
+        await page.set_viewport_size({"width": viewport_width, "height": viewport_height})
+        await page.set_content(
+            html_content,
+            wait_until="networkidle",
+            timeout=config_steam.steam_dynamic_card_timeout_ms,
+        )
+        await page.wait_for_selector(
+            ".steam-card",
+            state="visible",
+            timeout=config_steam.steam_dynamic_card_timeout_ms,
+        )
+        card = await page.query_selector(".steam-card")
+        if not card:
+            return None
+
+        for avatar_frame, _ in avatar_frames:
+            await page.evaluate(
+                "(src) => { document.querySelector('.avatar').src = src; }",
+                _image_to_png_data_url(avatar_frame),
+            )
+            frame_bytes = await card.screenshot(type="png", omit_background=True)
+            card_frames.append(PILImage.open(io.BytesIO(frame_bytes)).convert("RGBA"))
+
+    if not card_frames:
+        return None
+
+    output = io.BytesIO()
+    card_frames[0].save(
+        output,
+        format="GIF",
+        save_all=True,
+        append_images=card_frames[1:],
+        duration=[duration for _, duration in avatar_frames],
+        loop=0,
+        disposal=2,
+    )
+    return output.getvalue()
+
+
 async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name: str, action_text: str) -> Optional[bytes]:
     if not config_steam.steam_dynamic_avatar_card or not is_animated_image_url(avatar_url):
         return None
@@ -193,6 +312,7 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             frame_count = config_steam.steam_dynamic_card_frame_count
             frame_duration_ms = config_steam.steam_dynamic_card_frame_duration_ms
             capture_interval_ms = config_steam.steam_dynamic_card_capture_interval_ms
+        preserve_avatar_timing = config_steam.steam_dynamic_card_preserve_avatar_gif_timing
         cache_key = build_steam_card_cache_key(
             avatar_url=avatar_url,
             player_name=player_name,
@@ -204,11 +324,34 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             frame_duration_ms=frame_duration_ms,
             capture_interval_ms=capture_interval_ms,
             capture_duration_ms=config_steam.steam_dynamic_card_capture_duration_ms,
+            preserve_avatar_timing=preserve_avatar_timing,
+            max_avatar_frames=config_steam.steam_dynamic_card_max_avatar_frames,
         )
         cache_file = dynamic_card_cache_dir / f"{cache_key}.gif"
         if config_steam.steam_dynamic_card_cache and cache_file.exists():
             logger.debug(f"Steam 动态卡片缓存命中: {cache_key}")
             return cache_file.read_bytes()
+
+        if preserve_avatar_timing:
+            avatar_frames = await _download_avatar_gif_frames(avatar_url)
+            if avatar_frames:
+                gif_data = await _render_dynamic_steam_card_with_avatar_frames(
+                    template_html=template_html,
+                    avatar_frames=avatar_frames,
+                    player_name=player_name,
+                    game_name=game_name,
+                    action_text=action_text,
+                    card_class=card_class,
+                    viewport_width=viewport_width,
+                    viewport_height=viewport_height,
+                )
+                if gif_data:
+                    if config_steam.steam_dynamic_card_cache:
+                        cache_file.write_bytes(gif_data)
+                        logger.debug(f"Steam 动态卡片原时序缓存写入: {cache_key}")
+                    return gif_data
+            logger.debug("Steam 动态卡片保留原头像 GIF 时序失败，回退截图采样模式")
+            cache_file = None
 
         html_content = render_steam_card_template(
             template_html=template_html,
@@ -256,7 +399,7 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             disposal=2,
         )
         gif_data = output.getvalue()
-        if config_steam.steam_dynamic_card_cache:
+        if config_steam.steam_dynamic_card_cache and cache_file:
             cache_file.write_bytes(gif_data)
             logger.debug(f"Steam 动态卡片缓存写入: {cache_key}")
         return gif_data
@@ -591,8 +734,14 @@ async def now_steam():
                     steam_id_to_groups[steam_id].append(group_id)
         logger.debug("steam生成查询字典完成，准备添加任务")
         async with http_client() as client:
+            semaphore = asyncio.Semaphore(config_steam.steam_status_query_concurrency)
+
+            async def query_status(steam_id: str):
+                async with semaphore:
+                    await get_status(client, steam_id_to_groups, steam_list, steam_id)
+
             for steam_id in steam_id_to_groups:
-                task_list.append(get_status(client, steam_id_to_groups, steam_list, steam_id))
+                task_list.append(query_status(steam_id))
             try:
                 logger.debug("steam添加任务完成，准备运行并等待任务")
                 await asyncio.wait_for(asyncio.gather(*task_list), timeout=(config_steam.steam_interval * 60 - 20))
@@ -627,14 +776,25 @@ async def now_steam_owned_games():
         logger.debug("steam游戏库入库播报未开启，跳过本次检查")
         return
 
-    logger.info(f"steam开始检查游戏库入库变更，用户数：{len(steam_id_to_groups)}")
-    for steam_id, group_ids in steam_id_to_groups.items():
+    async def fetch_owned_games(steam_id: str):
         try:
-            current_games = await get_owned_games(steam_id)
+            return steam_id, await get_owned_games(steam_id)
         except Exception as e:
             logger.warning(f"steam游戏库获取异常，steam_id:{steam_id}，跳过本次更新：{e.args}")
-            continue
+            return steam_id, None
 
+    logger.info(f"steam开始检查游戏库入库变更，用户数：{len(steam_id_to_groups)}")
+    semaphore = asyncio.Semaphore(config_steam.steam_owned_game_query_concurrency)
+
+    async def limited_fetch_owned_games(steam_id: str):
+        async with semaphore:
+            return await fetch_owned_games(steam_id)
+
+    owned_game_results = await asyncio.gather(
+        *(limited_fetch_owned_games(steam_id) for steam_id in steam_id_to_groups)
+    )
+    for steam_id, current_games in owned_game_results:
+        group_ids = steam_id_to_groups[steam_id]
         if current_games is None:
             continue
 

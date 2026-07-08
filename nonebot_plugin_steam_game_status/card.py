@@ -41,6 +41,8 @@ def build_steam_card_cache_key(
     frame_duration_ms: int = STEAM_CARD_ANIMATION_FRAME_DURATION_MS,
     capture_interval_ms: int = STEAM_CARD_ANIMATION_CAPTURE_INTERVAL_MS,
     capture_duration_ms: int = STEAM_CARD_ANIMATION_CAPTURE_DURATION_MS,
+    preserve_avatar_timing: bool = False,
+    max_avatar_frames: int = 120,
 ) -> str:
     cache_data = {
         "avatar_url": avatar_url,
@@ -53,6 +55,8 @@ def build_steam_card_cache_key(
         "frame_duration_ms": frame_duration_ms,
         "capture_interval_ms": capture_interval_ms,
         "capture_duration_ms": capture_duration_ms,
+        "preserve_avatar_timing": preserve_avatar_timing,
+        "max_avatar_frames": max_avatar_frames,
     }
     cache_json = json.dumps(cache_data, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(cache_json.encode("utf8")).hexdigest()

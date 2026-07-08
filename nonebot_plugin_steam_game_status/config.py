@@ -24,10 +24,14 @@ class Config(BaseModel):
     steam_link_r18_game: Union[bool, List[str]] = False
     steam_tail_tone: str = ""
     steam_subscribe_time: Union[str, List[str]] = ["08:00"]
+    steam_status_query_concurrency: int = 10
     steam_owned_game_interval: int = 60
+    steam_owned_game_query_concurrency: int = 5
     steam_owned_game_baseline_concurrency: int = 5
     steam_dynamic_avatar_card: bool = False
     steam_dynamic_card_cache: bool = True
+    steam_dynamic_card_preserve_avatar_gif_timing: bool = False
+    steam_dynamic_card_max_avatar_frames: int = 120
     steam_dynamic_card_frame_count: int = 12
     steam_dynamic_card_frame_duration_ms: int = 120
     steam_dynamic_card_capture_interval_ms: int = 80
@@ -69,11 +73,23 @@ class Config(BaseModel):
             return v
         raise ValueError("steam查询间隔必须为大于0的整数")    
 
+    @validator("steam_status_query_concurrency")
+    def check_steam_status_query_concurrency(cls, v: int) -> int:
+        if v >= 1:
+            return v
+        raise ValueError("steam_status_query_concurrency 必须为大于0的整数")
+
     @validator("steam_owned_game_interval")
     def check_steam_owned_game_interval(cls, v: int) -> int:
         if v >= 1:
             return v
         raise ValueError("steam游戏库入库播报查询间隔必须为大于0的整数")
+
+    @validator("steam_owned_game_query_concurrency")
+    def check_steam_owned_game_query_concurrency(cls, v: int) -> int:
+        if v >= 1:
+            return v
+        raise ValueError("steam_owned_game_query_concurrency 必须为大于0的整数")
 
     @validator("steam_owned_game_baseline_concurrency")
     def check_steam_owned_game_baseline_concurrency(cls, v: int) -> int:
@@ -175,6 +191,18 @@ class Config(BaseModel):
         else:
             logger.info("steam_dynamic_card_cache 动态卡片缓存 已关闭")
         return v
+
+    @validator("steam_dynamic_card_preserve_avatar_gif_timing")
+    def check_dynamic_card_preserve_avatar_gif_timing(cls, v: bool) -> bool:
+        if v:
+            logger.info("steam_dynamic_card_preserve_avatar_gif_timing 已开启，将尽量保留原头像 GIF 帧时序")
+        return v
+
+    @validator("steam_dynamic_card_max_avatar_frames")
+    def check_dynamic_card_max_avatar_frames(cls, v: int) -> int:
+        if v >= 0:
+            return v
+        raise ValueError("steam_dynamic_card_max_avatar_frames 必须为大于等于0的整数")
 
     @validator("steam_dynamic_card_frame_count")
     def check_dynamic_card_frame_count(cls, v: int) -> int:

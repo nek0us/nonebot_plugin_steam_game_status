@@ -93,6 +93,35 @@ class TestSteamCardCache(unittest.TestCase):
 
         self.assertNotEqual(normal_key, compact_key)
 
+    def test_cache_key_includes_preserve_avatar_timing(self):
+        base = {
+            "avatar_url": "https://example.com/avatar.gif",
+            "player_name": "Alice",
+            "action_text": "开始玩",
+            "game_name": "Game",
+            "template_digest": "template",
+        }
+
+        sampled_key = card.build_steam_card_cache_key(preserve_avatar_timing=False, **base)
+        preserved_key = card.build_steam_card_cache_key(preserve_avatar_timing=True, **base)
+
+        self.assertNotEqual(sampled_key, preserved_key)
+
+    def test_cache_key_includes_max_avatar_frames(self):
+        base = {
+            "avatar_url": "https://example.com/avatar.gif",
+            "player_name": "Alice",
+            "action_text": "开始玩",
+            "game_name": "Game",
+            "template_digest": "template",
+            "preserve_avatar_timing": True,
+        }
+
+        small_key = card.build_steam_card_cache_key(max_avatar_frames=60, **base)
+        large_key = card.build_steam_card_cache_key(max_avatar_frames=120, **base)
+
+        self.assertNotEqual(small_key, large_key)
+
     def test_detects_gif_avatar_url(self):
         self.assertTrue(card.is_animated_image_url("https://example.com/avatar.GIF?size=small"))
         self.assertFalse(card.is_animated_image_url("https://example.com/avatar.jpg"))
