@@ -18,9 +18,9 @@
             align-items: center;
             /* Steam 经典深色 */
             background: linear-gradient(135deg, #1b2838 0%, #171a21 100%);
-            padding: 12px;
+            padding: 10px;
             border-radius: 4px;
-            width: 400px; /* 固定宽度，可做适当修改 */
+            width: 332px;
             border: 1px solid #2a475e;
             position: relative;
             overflow: hidden;
@@ -29,13 +29,13 @@
 
         .avatar-box {
             position: relative;
-            margin-right: 16px;
+            margin-right: 12px;
             flex-shrink: 0;
         }
 
         .avatar {
-            width: 74px;
-            height: 74px;
+            width: 64px;
+            height: 64px;
             border-radius: 4px;
             display: block;
         }
@@ -55,12 +55,12 @@
             flex-direction: column;
             justify-content: center;
             z-index: 2;
-            max-width: 340px;
+            max-width: 240px;
         }
 
 
         .player-name {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: bold;
             color: #90ba3c;
             margin-bottom: 2px;
@@ -78,7 +78,7 @@
 
 
         .game-name {
-            font-size: 18px;
+            font-size: 17px;
             color: #ffffff;
             font-weight: 500;
             white-space: nowrap;
@@ -90,9 +90,9 @@
         /* 背景装饰水印Steam效果 */
         .bg-watermark {
             position: absolute;
-            right: -20px;
-            bottom: -30px;
-            font-size: 140px;
+            right: -16px;
+            bottom: -24px;
+            font-size: 118px;
             font-weight: bold;
             color: rgba(255, 255, 255, 0.03); /* 调整的话改此透明度 */
             transform: rotate(-10deg);
@@ -100,10 +100,55 @@
             user-select: none;
             z-index: 1;
         }
+
+        .steam-card.compact {
+            padding: 7px 9px;
+            width: 240px;
+        }
+
+        .steam-card.compact .avatar-box {
+            margin-right: 8px;
+        }
+
+        .steam-card.compact .avatar {
+            width: 52px;
+            height: 52px;
+        }
+
+        .steam-card.compact .info-box {
+            max-width: 176px;
+        }
+
+        .steam-card.compact .player-name {
+            font-size: 16px;
+        }
+
+        .steam-card.compact .action-text {
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+
+        .steam-card.compact .game-name {
+            font-size: 14px;
+        }
+
+        .steam-card.compact .bg-watermark {
+            right: -12px;
+            bottom: -18px;
+            font-size: 88px;
+        }
+
+        .steam-card.wide {
+            width: 382px;
+        }
+
+        .steam-card.wide .info-box {
+            max-width: 290px;
+        }
     </style>
 </head>
 <body>
-    <div class="steam-card">
+    <div class="steam-card {{ card_class }}">
         <div class="bg-watermark">Steam</div>
 
         <div class="avatar-box">

@@ -65,9 +65,51 @@ class TestSteamCardCache(unittest.TestCase):
 
         self.assertNotEqual(dense_key, sparse_key)
 
+    def test_cache_key_includes_capture_duration(self):
+        base = {
+            "avatar_url": "https://example.com/avatar.gif",
+            "player_name": "Alice",
+            "action_text": "开始玩",
+            "game_name": "Game",
+            "template_digest": "template",
+        }
+
+        short_key = card.build_steam_card_cache_key(capture_duration_ms=1800, **base)
+        full_key = card.build_steam_card_cache_key(capture_duration_ms=4000, **base)
+
+        self.assertNotEqual(short_key, full_key)
+
+    def test_cache_key_includes_card_class(self):
+        base = {
+            "avatar_url": "https://example.com/avatar.gif",
+            "player_name": "Alice",
+            "action_text": "开始玩",
+            "game_name": "Game",
+            "template_digest": "template",
+        }
+
+        normal_key = card.build_steam_card_cache_key(card_class="", **base)
+        compact_key = card.build_steam_card_cache_key(card_class="compact", **base)
+
+        self.assertNotEqual(normal_key, compact_key)
+
     def test_detects_gif_avatar_url(self):
         self.assertTrue(card.is_animated_image_url("https://example.com/avatar.GIF?size=small"))
         self.assertFalse(card.is_animated_image_url("https://example.com/avatar.jpg"))
+
+    def test_dynamic_card_uses_compact_layout(self):
+        card_class, width, height = card.get_steam_card_layout("Game", dynamic=True)
+
+        self.assertEqual(card_class, "compact")
+        self.assertEqual(width, card.STEAM_CARD_COMPACT_VIEWPORT_WIDTH)
+        self.assertEqual(height, card.STEAM_CARD_COMPACT_VIEWPORT_HEIGHT)
+
+    def test_long_static_game_uses_wide_layout(self):
+        card_class, width, height = card.get_steam_card_layout("Very Very Long Game Name")
+
+        self.assertEqual(card_class, "wide")
+        self.assertEqual(width, card.STEAM_CARD_WIDE_VIEWPORT_WIDTH)
+        self.assertEqual(height, card.STEAM_CARD_WIDE_VIEWPORT_HEIGHT)
 
 
 if __name__ == "__main__":

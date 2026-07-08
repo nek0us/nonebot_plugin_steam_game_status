@@ -21,8 +21,8 @@ from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
 
 from .utils import http_client, driver, HTTPClientSession, to_enum, playwright_context
 from .card import (
-    STEAM_CARD_ANIMATION_FRAME_COUNT,
     build_steam_card_cache_key,
+    get_steam_card_layout,
     is_animated_image_url,
     render_steam_card_template,
 )
@@ -137,17 +137,19 @@ async def render_steam_card(avatar_url: str, player_name: str, game_name: str, a
             logger.warning("Steam卡片模板文件 steam_card.html 不存在，跳过渲染")
             return None
 
+        card_class, viewport_width, viewport_height = get_steam_card_layout(game_name)
         pic_data = await template_to_pic(
             template_path=template_path,
             template_name="steam_card.html",
             templates={
+                "card_class": card_class,
                 "avatar_url": avatar_url,
                 "player_name": player_name,
                 "action_text": action_text,
                 "game_name": game_name,
             },
             pages={
-                "viewport": {"width": 426, "height": 100},
+                "viewport": {"width": viewport_width, "height": viewport_height},
                 "base_url": f"file://{template_path}",
             },
             wait=1,  # 等待1秒确保图片加载？可以核实一下有必要没
@@ -171,14 +173,37 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
 
         template_html = template_file.read_text("utf8")
         template_digest = hashlib.sha256(template_html.encode("utf8")).hexdigest()
+        card_class, viewport_width, viewport_height = get_steam_card_layout(game_name, dynamic=True)
+        if config_steam.steam_dynamic_card_capture_duration_ms > 0:
+            frame_count = max(
+                config_steam.steam_dynamic_card_frame_count,
+                (
+                    config_steam.steam_dynamic_card_capture_duration_ms
+                    + config_steam.steam_dynamic_card_capture_interval_ms
+                    - 1
+                )
+                // config_steam.steam_dynamic_card_capture_interval_ms,
+            )
+            frame_duration_ms = max(
+                20,
+                round(config_steam.steam_dynamic_card_capture_duration_ms / frame_count),
+            )
+            capture_interval_ms = frame_duration_ms
+        else:
+            frame_count = config_steam.steam_dynamic_card_frame_count
+            frame_duration_ms = config_steam.steam_dynamic_card_frame_duration_ms
+            capture_interval_ms = config_steam.steam_dynamic_card_capture_interval_ms
         cache_key = build_steam_card_cache_key(
             avatar_url=avatar_url,
             player_name=player_name,
             action_text=action_text,
             game_name=game_name,
             template_digest=template_digest,
-            frame_duration_ms=config_steam.steam_dynamic_card_frame_duration_ms,
-            capture_interval_ms=config_steam.steam_dynamic_card_capture_interval_ms,
+            card_class=card_class,
+            frame_count=frame_count,
+            frame_duration_ms=frame_duration_ms,
+            capture_interval_ms=capture_interval_ms,
+            capture_duration_ms=config_steam.steam_dynamic_card_capture_duration_ms,
         )
         cache_file = dynamic_card_cache_dir / f"{cache_key}.gif"
         if config_steam.steam_dynamic_card_cache and cache_file.exists():
@@ -191,11 +216,12 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             player_name=player_name,
             action_text=action_text,
             game_name=game_name,
+            card_class=card_class,
         )
         frames = []
         async with playwright_context() as pc:
             page = await pc.new_page()
-            await page.set_viewport_size({"width": 426, "height": 100})
+            await page.set_viewport_size({"width": viewport_width, "height": viewport_height})
             await page.set_content(
                 html_content,
                 wait_until="networkidle",
@@ -211,10 +237,10 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             if not card:
                 return None
 
-            for _ in range(STEAM_CARD_ANIMATION_FRAME_COUNT):
+            for _ in range(frame_count):
                 frame_bytes = await card.screenshot(type="png", omit_background=True)
                 frames.append(PILImage.open(io.BytesIO(frame_bytes)).convert("RGBA"))
-                await page.wait_for_timeout(config_steam.steam_dynamic_card_capture_interval_ms)
+                await page.wait_for_timeout(capture_interval_ms)
 
         if not frames:
             return None
@@ -225,7 +251,7 @@ async def render_dynamic_steam_card(avatar_url: str, player_name: str, game_name
             format="GIF",
             save_all=True,
             append_images=frames[1:],
-            duration=config_steam.steam_dynamic_card_frame_duration_ms,
+            duration=frame_duration_ms,
             loop=0,
             disposal=2,
         )
@@ -626,7 +652,10 @@ async def now_steam_owned_games():
             continue
 
         player_name = steam_list.get(steam_id, {}).get("nickname", steam_id)
-        game_lines = [f"《{current_games[appid]}》" for appid in new_appids]
+        game_lines = []
+        for appid in new_appids:
+            game_name = await gameid_to_name(appid, current_games[appid])
+            game_lines.append(f"《{game_name or current_games[appid]}》")
         message_text = f"{player_name} 的 Steam 游戏库新增了：\n" + "\n".join(game_lines)
         sent = False
 
