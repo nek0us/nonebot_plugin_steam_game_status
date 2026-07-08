@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <style>
 
-        body {
+        html, body {
             margin: 0;
             padding: 0;
-            background-color: transparent;
+            background-color: #171a21;
             font-family: "Microsoft YaHei", "Arial", sans-serif;
             width: fit-content;
         }
@@ -20,7 +20,9 @@
             background: linear-gradient(135deg, #1b2838 0%, #171a21 100%);
             padding: 10px;
             border-radius: 4px;
-            width: 332px;
+            box-sizing: border-box;
+            width: 356px;
+            min-height: 88px;
             border: 1px solid #2a475e;
             position: relative;
             overflow: hidden;
@@ -117,7 +119,8 @@
 
         .steam-card.compact {
             padding: 7px 9px;
-            width: 240px;
+            width: 260px;
+            min-height: 72px;
         }
 
         .steam-card.compact .avatar-box {
@@ -153,7 +156,7 @@
         }
 
         .steam-card.wide {
-            width: 382px;
+            width: 406px;
         }
 
         .steam-card.wide .info-box {
