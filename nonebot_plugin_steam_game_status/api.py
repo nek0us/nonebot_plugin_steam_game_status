@@ -1,6 +1,7 @@
 
 import json
 import random
+import asyncio
 
 from nonebot import require
 from nonebot.log import logger
@@ -513,12 +514,33 @@ async def get_steam_playtime(steam_id: str) -> bytes:
     async with playwright_context() as pc:
         page = await pc.new_page()
         await page.set_viewport_size({"width": 1920, "height": 1080})
-        await page.goto(url=url, timeout=60000)
         try:
-            await page.wait_for_load_state('networkidle')
-            await page.wait_for_selector("#games-stage", state="visible", timeout=60000)
+            await asyncio.wait_for(
+                page.goto(
+                    url=url,
+                    wait_until="domcontentloaded",
+                    timeout=config_steam.steam_playtime_timeout_ms + 1000,
+                ),
+                timeout=config_steam.steam_playtime_timeout_ms / 1000,
+            )
+            await asyncio.wait_for(
+                page.wait_for_selector(
+                    "#games-stage",
+                    state="visible",
+                    timeout=config_steam.steam_playtime_timeout_ms + 1000,
+                ),
+                timeout=config_steam.steam_playtime_timeout_ms / 1000,
+            )
+        except asyncio.TimeoutError as e:
+            raise SteamPlaytimeUnavailableError(
+                "拼图服务连接超时，请检查网络或稍后再试"
+            ) from e
         except Exception as e:
             logger.warning(f"Steam 游戏时长拼图获取失败，ID:{steam_id}, url: {url}, error: {e}")
+            if "net::err_" in str(e).lower():
+                raise SteamPlaytimeUnavailableError(
+                    "拼图服务网络不可达，请检查网络或代理设置"
+                ) from e
             games_stage = await page.query_selector("#games-stage")
             if games_stage and not await games_stage.is_visible():
                 raise SteamPlaytimeUnavailableError(

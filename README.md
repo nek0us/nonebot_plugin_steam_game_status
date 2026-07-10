@@ -109,6 +109,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_owned_game_interval | 否 | 60 | int | 入库播报查询间隔，单位分钟 |
 | steam_owned_game_query_concurrency | 否 | 5 | int | 入库播报轮询并发上限 |
 | steam_owned_game_baseline_concurrency | 否 | 5 | int | 开启入库播报时建立游戏库基准的并发上限 |
+| steam_playtime_timeout_ms | 否 | 20000 | int | `steam墙` 拼图服务的单次等待超时，单位毫秒 |
 
 ### 链接识别
 
