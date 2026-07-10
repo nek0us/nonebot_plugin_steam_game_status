@@ -59,6 +59,7 @@ from .source import (
     exclude_game,
     game_discounted_cache,
     dynamic_card_cache_dir,
+    image_resource_cache_dir,
 )
 from .cache import cleanup_expired_cache_files
 
@@ -187,6 +188,9 @@ async def steam_link_handle(target: MsgTarget, matcher: Matcher, appid: Match[st
 async def _():
     removed_cache_files = cleanup_expired_cache_files(
         dynamic_card_cache_dir, config_steam.steam_image_cache_retention_days
+    )
+    removed_cache_files += cleanup_expired_cache_files(
+        image_resource_cache_dir, config_steam.steam_image_cache_retention_days
     )
     if removed_cache_files:
         logger.info(f"Cleaned {removed_cache_files} expired Steam image cache files")

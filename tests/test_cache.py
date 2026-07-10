@@ -14,6 +14,17 @@ cache_spec.loader.exec_module(cache)
 
 
 class TestCacheCleanup(unittest.TestCase):
+    def test_image_resource_variants_use_distinct_deterministic_paths(self):
+        cache_dir = Path("image-cache")
+        url = "https://example.com/avatar.jpg?size=full"
+
+        original = cache.build_image_resource_cache_file(cache_dir, url, False)
+        grayscale = cache.build_image_resource_cache_file(cache_dir, url, True)
+
+        self.assertNotEqual(original, grayscale)
+        self.assertEqual(original.suffix, ".jpg")
+        self.assertEqual(grayscale.suffix, ".png")
+
     def test_removes_only_expired_files(self):
         with tempfile.TemporaryDirectory() as directory:
             cache_dir = Path(directory)

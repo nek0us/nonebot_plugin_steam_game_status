@@ -118,8 +118,14 @@ async def render_steam_card(
 ) -> Optional[bytes]:
     from nonebot.log import logger
     from nonebot_plugin_htmlrender import template_to_pic
+    from .cache import get_cached_image_url
 
     try:
+        avatar_url = await get_cached_image_url(avatar_url, grayscale=avatar_grayscale)
+        if background_url:
+            background_url = await get_cached_image_url(
+                background_url, grayscale=background_grayscale
+            )
         template_path = str(Path(__file__).parent / "templates")
 
         if not (Path(__file__).parent / "templates" / "steam_card.html").exists():
@@ -455,8 +461,10 @@ async def render_dynamic_steam_card(
 async def render_bind_card(avatar_url: str, player_name: str, steam_id: str) -> Optional[bytes]:
     from nonebot.log import logger
     from nonebot_plugin_htmlrender import template_to_pic
+    from .cache import get_cached_image_url
 
     try:
+        avatar_url = await get_cached_image_url(avatar_url)
         template_path = str(Path(__file__).parent / "templates")
 
         if not (Path(__file__).parent / "templates" / "steam_bind_card.html").exists():

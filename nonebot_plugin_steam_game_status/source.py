@@ -42,8 +42,10 @@ game_discounted_cache_file = data_dir / "game_discounted_cache.json"
 game_discounted_subscribe_file = data_dir / "game_discounted_subscribe.json"
 owned_games_file = data_dir / "owned_games.json"
 dynamic_card_cache_dir = data_dir / "dynamic_card_cache"
+image_resource_cache_dir = data_dir / "image_resource_cache"
 
 dynamic_card_cache_dir.mkdir(parents=True, exist_ok=True)
+image_resource_cache_dir.mkdir(parents=True, exist_ok=True)
 
 exclude_game_default = ["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
 
