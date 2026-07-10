@@ -127,6 +127,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_dynamic_card_preserve_avatar_gif_timing | 否 | true | bool | 生成动态卡片时尽量保留原头像 GIF 的帧数和播放速度 |
 | steam_dynamic_card_max_avatar_frames | 否 | 120 | int | 保留原头像 GIF 时序时的最大帧数。0 表示不限制，最接近原头像但生成更慢、文件更大 |
 | steam_dynamic_avatar_cache_ttl_minutes | 否 | 60 | int | 动态头像地址缓存时间，单位分钟。0 表示不缓存 |
+| steam_image_cache_retention_days | 否 | 30 | int | 图片磁盘缓存保留天数。启动时清理超过期限且未被使用的缓存；0 表示不自动清理 |
 | steam_dynamic_card_timeout_ms | 否 | 15000 | int | 动态卡片渲染等待超时，单位毫秒 |
 | steam_dynamic_card_frame_count | 否 | 50 | int | 回退采样模式的最低帧数 |
 | steam_dynamic_card_frame_duration_ms | 否 | 80 | int | 回退手动模式的 GIF 帧间隔，单位毫秒 |

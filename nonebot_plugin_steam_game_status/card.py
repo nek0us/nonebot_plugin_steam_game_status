@@ -370,6 +370,7 @@ async def render_dynamic_steam_card(
         )
         cache_file = dynamic_card_cache_dir / f"{cache_key}.gif"
         if config_steam.steam_dynamic_card_cache and cache_file.exists():
+            cache_file.touch()
             logger.debug(f"Steam 动态卡片缓存命中: {cache_key}")
             return cache_file.read_bytes()
 

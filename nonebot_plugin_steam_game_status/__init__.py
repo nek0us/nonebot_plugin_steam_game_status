@@ -58,7 +58,9 @@ from .source import (
     group_list,
     exclude_game,
     game_discounted_cache,
+    dynamic_card_cache_dir,
 )
+from .cache import cleanup_expired_cache_files
 
 require("nonebot_plugin_alconna")
 from nonebot_plugin_alconna import Arparma, on_alconna, Match  # noqa: E402
@@ -183,6 +185,12 @@ async def steam_link_handle(target: MsgTarget, matcher: Matcher, appid: Match[st
 
 @driver.on_startup
 async def _():
+    removed_cache_files = cleanup_expired_cache_files(
+        dynamic_card_cache_dir, config_steam.steam_image_cache_retention_days
+    )
+    if removed_cache_files:
+        logger.info(f"Cleaned {removed_cache_files} expired Steam image cache files")
+
     # 当bot启动时，忽略所有未播报的游戏
     for steam_id in steam_list:
         if steam_list[steam_id] and steam_list[steam_id]["time"] != 0:

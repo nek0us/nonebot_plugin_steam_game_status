@@ -39,6 +39,7 @@ class Config(BaseModel):
     steam_dynamic_card_capture_duration_ms: int = 4000
     steam_dynamic_card_timeout_ms: int = 15000
     steam_dynamic_avatar_cache_ttl_minutes: int = 60
+    steam_image_cache_retention_days: int = 30
     
     @validator("steam_isthereanydeal_key")
     def check_isthereanydeal_key(cls,v: Union[str, List[str]]) -> Union[str, List[str]]:
@@ -246,6 +247,12 @@ class Config(BaseModel):
         if v >= 0:
             return v
         raise ValueError("steam_dynamic_avatar_cache_ttl_minutes 必须为大于等于0的整数")
+
+    @validator("steam_image_cache_retention_days")
+    def check_image_cache_retention_days(cls, v: int) -> int:
+        if v >= 0:
+            return v
+        raise ValueError("steam_image_cache_retention_days 必须为大于等于0的整数")
     
 config_steam = get_plugin_config(Config)
 bot_name = list(get_driver().config.nickname)
