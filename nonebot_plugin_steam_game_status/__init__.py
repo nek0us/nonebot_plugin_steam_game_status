@@ -627,6 +627,8 @@ steam_command_alc = Alconna(
     separators="",
     meta=CommandMeta(compact=True)
 )
+# 兼容用户习惯输入的首字母大写命令，例如 Steam帮助、Steam绑定。
+steam_command_alc.shortcut("Steam", {"command": "steam {args}", "fuzzy": True})
 steam_cmd = on_alconna(steam_command_alc, priority=config_steam.steam_command_priority, rule=no_private_rule)
 
 
