@@ -30,6 +30,7 @@ class Config(BaseModel):
     steam_owned_game_query_concurrency: int = 5
     steam_owned_game_baseline_concurrency: int = 5
     steam_playtime_timeout_ms: int = 20000
+    steam_link_timeout_seconds: Optional[int] = 15
     steam_dynamic_avatar_card: bool = False
     steam_dynamic_card_cache: bool = True
     steam_dynamic_card_preserve_avatar_gif_timing: bool = True
@@ -105,6 +106,12 @@ class Config(BaseModel):
         if v >= 1000:
             return v
         raise ValueError("steam_playtime_timeout_ms 必须为大于等于1000的整数")
+
+    @validator("steam_link_timeout_seconds")
+    def check_link_timeout_seconds(cls, v: int) -> int:
+        if v >= 1:
+            return v
+        raise ValueError("steam_link_timeout_seconds 必须为大于等于1的整数")
     
     @validator("steam_proxy")
     def check_proxy(cls,v:Union[str, None]) -> Union[str, None]:

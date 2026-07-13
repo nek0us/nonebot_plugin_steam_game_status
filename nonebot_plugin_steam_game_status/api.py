@@ -51,9 +51,9 @@ async def steam_link_rule() -> bool:
     return False
 
 
-async def get_game_info(app_id: str) -> dict:
+async def get_game_info(app_id: str, timeout = None) -> dict:
     error = {'success': False}
-    async with http_client() as client:
+    async with http_client(timeout=timeout) as client:
         for location in ["cn", "hk", "tw", "jp", "us"] if config_steam.steam_area_game else ["cn"]:
             url = f"https://{get_steam_store_domain()}/api/appdetails?appids={app_id}&cc={location}"
             try:
@@ -70,7 +70,8 @@ async def get_game_info(app_id: str) -> dict:
                 else:
                     error = {'error':f"{res.status_code}\n{res.headers}\n{res.content}"}
             except Exception as e:
-                error = {'error':e}
+                logger.debug(f"Steam 商店详情请求失败，appid:{app_id}, error:{e}")
+                error = {"error": e}
     return error
 
 async def generate_image(html_content: str, width: int = 500) -> bytes:

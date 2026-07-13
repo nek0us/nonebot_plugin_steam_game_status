@@ -148,7 +148,7 @@ steam_link_re = on_alconna(
 async def steam_link_handle(target: MsgTarget, matcher: Matcher, appid: Match[str]):
     app_id = str(appid.result)
     try:
-        res_json = await get_game_info(app_id)
+        res_json = await get_game_info(app_id, timeout=config_steam.steam_link_timeout_seconds)
         if 'error' in res_json:
             logger.warning(f"steam链接识别失败，异常为：{res_json['error']}")
             await matcher.finish("steam链接失败，请检查日志输出")
