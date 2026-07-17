@@ -95,7 +95,7 @@ _✨ 在群内播报 Steam 游戏状态的 Nonebot 插件 ✨_
 | steam_plugin_enabled | 否 | true | bool | 插件全局开关 |
 | steam_tail_tone | 否 | "" | str | bot尾音 |
 | steam_pretty_stop_duration | 否 | true | bool | 停止游戏播报时是否把分钟数格式化为天/小时/分钟，例如 `70 分钟` 显示为 `1小时10分钟` |
-| steam_proxy | 否 | None | str | 代理 |
+| steam_proxy | 否 | None | str | Steam 网络代理；用于插件原生 HTTP 请求和 Steam 墙浏览器 |
 | steam_api_proxy | 否 | None | str | Steam API 反代域名 |
 | steam_store_proxy | 否 | None | str | Steam Store 反代域名 |
 | steam_subscribe_time | 否 | ["08:00"] | str/List[str] | 喜加一和折扣订阅检索推送时间 |
@@ -154,6 +154,13 @@ steam_proxy 示例
 ```.env
 # .env.xxx
 steam_proxy="http://ip:port"
+```
+
+`steam_proxy` 不影响 HTMLRender 的静态卡片浏览器。若静态卡片网络资源加载失败，
+请在 NoneBot 配置中单独设置 HTMLRender 的代理：
+
+```.env
+htmlrender_proxy_host="http://ip:port"
 ```
 
 steam_api_proxy 和 steam_store_proxy 反代域名配置示例
