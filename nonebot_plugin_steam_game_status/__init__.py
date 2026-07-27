@@ -267,10 +267,25 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                 if game_name == "":
                     game_name = res_info["gameextrainfo"]
 
-                if game_name != steam_list[steam_id]["game_name"]:
+                appid_for_card = str(res_info.get("gameid", ""))
+                previous_game_id = str(steam_list[steam_id].get("game_id", ""))
+                # appid 相同仍是同一个游戏，只静默刷新展示名，不能作为切换游戏播报。
+                if appid_for_card == previous_game_id or (
+                    not previous_game_id and game_name == steam_list[steam_id]["game_name"]
+                ):
+                    if (
+                        game_name != steam_list[steam_id]["game_name"]
+                        or appid_for_card != previous_game_id
+                    ):
+                        user_info = UserData(
+                            time=steam_list[steam_id]["time"],
+                            game_name=game_name,
+                            nickname=res_info['personaname'],
+                            game_id=appid_for_card,
+                        )
+                else:
                     game_name_old = steam_list[steam_id]["game_name"]
                     timestamp = int(time.time() / 60)
-                    appid_for_card = str(res_info.get("gameid", ""))
                     user_info = UserData(
                         time=timestamp,
                         game_name=game_name,
@@ -313,10 +328,21 @@ async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, Li
                 if game_name == "":
                     game_name = res_info["gameextrainfo"]
                 game_name_old = steam_list[steam_id]["game_name"]
+                appid_for_card = str(res_info.get("gameid", ""))
+                previous_game_id = str(steam_list[steam_id].get("game_id", ""))
 
-                if game_name != game_name_old:
+                if appid_for_card == previous_game_id or (
+                    not previous_game_id and game_name == game_name_old
+                ):
+                    if game_name != game_name_old or appid_for_card != previous_game_id:
+                        user_info = UserData(
+                            time=steam_list[steam_id]["time"],
+                            game_name=game_name,
+                            nickname=res_info['personaname'],
+                            game_id=appid_for_card,
+                        )
+                else:
                     timestamp = int(time.time() / 60)
-                    appid_for_card = str(res_info.get("gameid", ""))
                     user_info = UserData(
                         time=timestamp,
                         game_name=game_name,

@@ -161,6 +161,7 @@ async def get_owned_games(steam_id: str) -> Optional[Dict[str, str]]:
 async def gameid_to_name(gameid: str,origin_name: Optional[str] = None) -> str:
     '''获取游戏中文名'''
     global gameid2name
+    gameid = str(gameid)
     if gameid in gameid2name:
         return gameid2name[gameid]
     res_json = await get_game_info(gameid)
@@ -171,7 +172,10 @@ async def gameid_to_name(gameid: str,origin_name: Optional[str] = None) -> str:
         logger.debug(f"get game name no success.{res_json}")
         return ""
     name = res_json['data']['name']
-    if origin_name is None and origin_name != name:
+    # Store 的 appdetails 成功响应可作为 appid 的稳定名称来源。此前这里
+    # 错把 `origin_name is None` 作为前提；状态轮询总会传入 Steam API
+    # 的 gameextrainfo，导致中文名永远不进入缓存、每轮都重新请求 Store。
+    if name:
         gameid2name[gameid] = name
         gameid2name[name] = gameid
         game_cache_file.write_text(json.dumps(gameid2name))
