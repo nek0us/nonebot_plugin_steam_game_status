@@ -26,6 +26,9 @@ class Config(BaseModel):
     steam_pretty_stop_duration: bool = True
     steam_subscribe_time: Union[str, List[str]] = ["08:00"]
     steam_status_query_concurrency: int = 6
+    # 1 表示保持原有行为：一次成功的无游戏状态即播报停止。
+    # 设置为 2 或更高时，需要连续多次成功查询无游戏才播报停止。
+    steam_stop_confirmations: int = 1
     steam_owned_game_interval: int = 60
     steam_owned_game_query_concurrency: int = 5
     steam_owned_game_baseline_concurrency: int = 5
@@ -82,6 +85,12 @@ class Config(BaseModel):
         if v >= 1:
             return v
         raise ValueError("steam_status_query_concurrency 必须为大于0的整数")
+
+    @validator("steam_stop_confirmations")
+    def check_steam_stop_confirmations(cls, v: int) -> int:
+        if v >= 1:
+            return v
+        raise ValueError("steam_stop_confirmations 必须为大于等于1的整数")
 
     @validator("steam_owned_game_interval")
     def check_steam_owned_game_interval(cls, v: int) -> int:

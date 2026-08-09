@@ -25,6 +25,11 @@ from .source import (
     steam_list,
     new_file_group,
     new_file_steam,
+    reported_steam_state,
+    atomic_write_json,
+    save_reported_steam_state,
+    get_delivery_group_lock,
+    bump_delivery_group_generation,
     exclude_game_file,
     exclude_game,
     game_free_cache_file,
@@ -178,7 +183,7 @@ async def gameid_to_name(gameid: str,origin_name: Optional[str] = None) -> str:
     if name:
         gameid2name[gameid] = name
         gameid2name[name] = gameid
-        game_cache_file.write_text(json.dumps(gameid2name))
+        atomic_write_json(game_cache_file, gameid2name)
     return name
 
 async def gameid_to_price(game_id: str,game_data: Dict,location: str = "CN") -> Dict[str, str]:
@@ -254,14 +259,15 @@ async def get_history_price(game_uuid: str, client: HTTPClientSession, location:
         raise ConnectionError(f"gameid_to_uuid 获取失败，game_uuid_id:{game_uuid}，res code:{res.status_code}，res text:{res.text}")
 
 def save_data():
-    global steam_list, group_list, exclude_game, inactive_groups,game_discounted_cache,game_discounted_subscribe,owned_games
-    new_file_group.write_text(json.dumps(group_list)) 
-    new_file_steam.write_text(json.dumps(steam_list))
-    exclude_game_file.write_text(json.dumps(exclude_game))
-    inactive_groups_file.write_text(json.dumps(inactive_groups))
-    game_discounted_cache_file.write_text(json.dumps(game_discounted_cache))
-    game_discounted_subscribe_file.write_text(json.dumps(game_discounted_subscribe))
-    owned_games_file.write_text(json.dumps(owned_games))
+    global steam_list, group_list, exclude_game, inactive_groups, game_discounted_cache, game_discounted_subscribe, owned_games, reported_steam_state
+    atomic_write_json(new_file_group, group_list)
+    atomic_write_json(new_file_steam, steam_list)
+    save_reported_steam_state(reported_steam_state)
+    atomic_write_json(exclude_game_file, exclude_game)
+    atomic_write_json(inactive_groups_file, inactive_groups)
+    atomic_write_json(game_discounted_cache_file, game_discounted_cache)
+    atomic_write_json(game_discounted_subscribe_file, game_discounted_subscribe)
+    atomic_write_json(owned_games_file, owned_games)
     
 async def no_private_rule(target: MsgTarget) -> bool:
     return not target.private
@@ -403,7 +409,7 @@ async def get_free_games_info(target: Optional[MsgTarget] = None):
                     game_free_cache.append(app_id)
                     if len(game_free_cache) > 10:
                         game_free_cache.pop(0)
-                    game_free_cache_file.write_text(json.dumps(game_free_cache))
+                    atomic_write_json(game_free_cache_file, game_free_cache)
 
                     for group_id in group_list:
                         if group_list[group_id]["xijiayi"]:
@@ -493,14 +499,18 @@ async def get_inactive_groups_list(target: Target) -> UniMessage:
 
 async def clear_inactive_groups_list(target: Target) -> UniMessage:
     '''清理失联群组列表'''
-    global inactive_groups, group_list
+    global inactive_groups, group_list, reported_steam_state
     try:
         inactive_groups_mirror = inactive_groups.copy()
         num = len(inactive_groups_mirror)
         for group_id in inactive_groups_mirror:
-            if group_id in group_list:
-                inactive_groups.remove(group_id)
-                del group_list[group_id]
+            async with get_delivery_group_lock(group_id):
+                if group_id in group_list:
+                    if group_id in inactive_groups:
+                        inactive_groups.remove(group_id)
+                    del group_list[group_id]
+                reported_steam_state.pop(group_id, None)
+                bump_delivery_group_generation(group_id)
         save_data()
         logger.info(f"清理steam失联群组列表成功，清理数量：{num}")
         return UniMessage(f"清理steam失联群组列表成功{config_steam.steam_tail_tone}，清理数量：{num}")

@@ -12,6 +12,7 @@ from nonebot.matcher import Matcher
 from nonebot.plugin import PluginMetadata
 from nonebot.internal.driver import Request
 from nonebot.exception import MatcherException
+from nonebot.exception import ActionFailed, NetworkError
 from nonebot.plugin import inherit_supported_adapters
 
 from arclet.alconna import Alconna, Option, Args, CommandMeta, AllParam
@@ -27,6 +28,14 @@ from .card import (
 )
 from .avatar import normalize_steam_avatar_url, resolve_avatar_url
 from .model import UserData, SafeResponse, create_group_data
+from .status_state import (
+    HandledStatePersistenceError,
+    build_steam_id_to_groups,
+    decide_status_transition,
+    delivery_snapshot_is_current,
+    persist_handled_event,
+    persist_then_send,
+)
 from .config import Config, __version__, config_steam, bot_name, get_steam_api_domain
 from .api import (
     clear_inactive_groups_list,
@@ -52,11 +61,18 @@ from .owned_games import initialize_owned_games_baseline, run_owned_games_check
 from .source import (
     new_file_group,
     new_file_steam,
+    save_reported_steam_state,
     exclude_game_file,
     exclude_game_default,
     steam_list,
+    reported_steam_state,
     group_list,
     exclude_game,
+    inactive_groups,
+    atomic_write_json,
+    get_delivery_group_lock,
+    get_delivery_group_generation,
+    bump_delivery_group_generation,
     game_discounted_cache,
     dynamic_card_cache_dir,
     image_resource_cache_dir,
@@ -71,6 +87,52 @@ require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler  # noqa: E402
 
 require("nonebot_plugin_htmlrender")
+
+# 仅用于“无游戏”连续确认；重启后清空会更保守地延迟一次停止播报。
+pending_stop_counts: Dict[str, Dict[str, int]] = {}
+
+
+def _delivery_is_current(
+    group_id: str,
+    steam_id: str,
+    expected_reported: Optional[UserData],
+    expected_generation: int,
+) -> bool:
+    """在群锁内确认任务快照尚未被解绑、关闭播报或另一任务替换。"""
+    return delivery_snapshot_is_current(
+        group_list.get(group_id),
+        steam_id,
+        expected_reported,
+        reported_steam_state.get(group_id, {}).get(steam_id),
+        expected_generation,
+        get_delivery_group_generation(group_id),
+    )
+
+
+def _persist_group_event(
+    group_id: str,
+    steam_id: str,
+    action_type: str,
+    current_game: UserData,
+) -> bool:
+    """调用方持有群锁时消费并落盘；失败会恢复内存状态。"""
+    try:
+        persist_handled_event(
+            reported_steam_state,
+            group_id,
+            steam_id,
+            action_type,
+            current_game,
+            lambda: save_reported_steam_state(reported_steam_state),
+        )
+    except Exception as error:
+        logger.error(
+            "Steam 状态事件落盘失败，未发送且允许后续重新处理 "
+            f"steam_id:{steam_id} 群:{group_id} action:{action_type}: {error}"
+        )
+        return False
+    return True
+
 
 __plugin_meta__ = PluginMetadata(
     name="Steam游戏状态",
@@ -195,7 +257,7 @@ async def _():
     if removed_cache_files:
         logger.info(f"Cleaned {removed_cache_files} expired Steam image cache files")
 
-    # 当bot启动时，忽略所有未播报的游戏
+    # 重启后不再沿用原始观测的开始时间，避免停止时误算跨重启时长。
     for steam_id in steam_list:
         if steam_list[steam_id] and steam_list[steam_id]["time"] != 0:
             steam_list[steam_id]["time"] = -1  # -1 为特殊时间用来判断是否重启
@@ -221,362 +283,254 @@ async def _():
             steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name, game_id="")
             logger.debug(f"Steam id: {steam_id},name: {steam_name} 异常，修复成功")
 
+    # 保持旧版重启后的时长语义：重启前已处理的游戏在停止时不猜测时长。
+    for group_reported in reported_steam_state.values():
+        for user_data in group_reported.values():
+            if user_data.get("game_name") and user_data.get("time") != 0:
+                user_data["time"] = -1
+
 
 async def get_status(client: HTTPClientSession, steam_id_to_groups: Dict[str, List[str]],
                      steam_list: Dict[str, UserData], steam_id: str):
     global exclude_game
-    user_info = []
     res = None
     try:
         url = f"https://{get_steam_api_domain()}/ISteamUser/GetPlayerSummaries/v0002/?key=" + get_steam_key() + "&steamids=" + steam_id
 
         res = SafeResponse(await client.request(Request("GET", url, timeout=30)))
-        if res.status_code == 200:
+        if res.status_code != 200:
+            logger.trace(f"steam id:{steam_id} 查询状态不是200，{res.status_code} {res.text}")
+            return
 
-            res_info = json.loads(res.text)["response"]["players"][0]
+        players = json.loads(res.text)["response"]["players"]
+        if not players:
+            logger.trace(f"steam id:{steam_id} 查询成功但用户信息为空")
+            return
+        res_info = players[0]
+        nickname = res_info["personaname"]
+        previous_raw = steam_list[steam_id]
+        is_playing = "gameextrainfo" in res_info
+        timestamp = int(time.time() / 60)
 
-            should_notify = False
-            action_type = ""
-            game_name_for_msg = ""
-            action_text_for_card = ""
-            appid_for_card = ""
-            game_name_old = ""
-            game_time_old = 0
-
-            if "gameextrainfo" in res_info and steam_list[steam_id]["game_name"] == "":
-                timestamp = int(time.time() / 60)
-                game_name = await gameid_to_name(res_info["gameid"], res_info["gameextrainfo"])
-                if game_name == "":
-                    game_name = res_info["gameextrainfo"]
-
-                appid_for_card = str(res_info.get("gameid", ""))
-                user_info = UserData(
-                    time=timestamp,
-                    game_name=game_name,
-                    nickname=res_info['personaname'],
-                    game_id=appid_for_card,
-                )
-                should_notify = True
-                action_type = "start"
-                game_name_for_msg = game_name
-                action_text_for_card = "开始玩"
-
-            elif "gameextrainfo" in res_info and steam_list[steam_id]["time"] != -1 and steam_list[steam_id][
-                "game_name"] != "":
-                game_name = await gameid_to_name(res_info["gameid"], res_info["gameextrainfo"])
-                if game_name == "":
-                    game_name = res_info["gameextrainfo"]
-
-                appid_for_card = str(res_info.get("gameid", ""))
-                previous_game_id = str(steam_list[steam_id].get("game_id", ""))
-                # appid 相同仍是同一个游戏，只静默刷新展示名，不能作为切换游戏播报。
-                if appid_for_card == previous_game_id or (
-                    not previous_game_id and game_name == steam_list[steam_id]["game_name"]
-                ):
-                    if (
-                        game_name != steam_list[steam_id]["game_name"]
-                        or appid_for_card != previous_game_id
-                    ):
-                        user_info = UserData(
-                            time=steam_list[steam_id]["time"],
-                            game_name=game_name,
-                            nickname=res_info['personaname'],
-                            game_id=appid_for_card,
-                        )
-                else:
-                    game_name_old = steam_list[steam_id]["game_name"]
-                    timestamp = int(time.time() / 60)
-                    user_info = UserData(
-                        time=timestamp,
-                        game_name=game_name,
-                        nickname=res_info['personaname'],
-                        game_id=appid_for_card,
-                    )
-                    should_notify = True
-                    action_type = "switch"
-                    game_name_for_msg = game_name
-                    action_text_for_card = "开始玩"
-
-            elif "gameextrainfo" not in res_info and steam_list[steam_id]["game_name"] != "":
-                timestamp = int(time.time() / 60)
-                game_name_old = steam_list[steam_id]["game_name"]
-                game_time_old = steam_list[steam_id]["time"]
-                appid_for_card = steam_list[steam_id].get("game_id", "")
-                user_info = UserData(
-                    time=timestamp,
-                    game_name="",
-                    nickname=res_info['personaname'],
-                    game_id="",
-                )
-                game_time = timestamp - game_time_old
-                should_notify = True
-                action_type = "stop"
-                game_name_for_msg = game_name_old
-                if game_time_old == -1:
-                    action_text_for_card = "结束了游戏"
-                else:
-                    game_time_text = (
-                        format_playtime_duration(game_time)
-                        if config_steam.steam_pretty_stop_duration
-                        else f"{game_time} 分钟"
-                    )
-                    action_text_for_card = f"玩了 {game_time_text} 后停止"
-
-            elif "gameextrainfo" in res_info and steam_list[steam_id]["time"] == -1 and steam_list[steam_id][
-                "game_name"] != "":
-                game_name = await gameid_to_name(res_info["gameid"], res_info["gameextrainfo"])
-                if game_name == "":
-                    game_name = res_info["gameextrainfo"]
-                game_name_old = steam_list[steam_id]["game_name"]
-                appid_for_card = str(res_info.get("gameid", ""))
-                previous_game_id = str(steam_list[steam_id].get("game_id", ""))
-
-                if appid_for_card == previous_game_id or (
-                    not previous_game_id and game_name == game_name_old
-                ):
-                    if game_name != game_name_old or appid_for_card != previous_game_id:
-                        user_info = UserData(
-                            time=steam_list[steam_id]["time"],
-                            game_name=game_name,
-                            nickname=res_info['personaname'],
-                            game_id=appid_for_card,
-                        )
-                else:
-                    timestamp = int(time.time() / 60)
-                    user_info = UserData(
-                        time=timestamp,
-                        game_name=game_name,
-                        nickname=res_info['personaname'],
-                        game_id=appid_for_card,
-                    )
-                    should_notify = True
-                    action_type = "restart_switch"
-                    game_name_for_msg = game_name
-                    action_text_for_card = "开始玩"
-
-            if should_notify:
-                card_image_bytes = None
-                avatar_url = await resolve_avatar_url(steam_id, res_info.get("avatarfull", ""))
-                image_enabled_group_ids = [
-                    group_id
-                    for group_id in steam_id_to_groups[steam_id]
-                    if (
-                        group_list.get(str(group_id), {}).get("stop_image", False)
-                        if action_type == "stop"
-                        else group_list.get(str(group_id), {}).get("image", True)
-                    )
-                ]
-                should_render_card = bool(image_enabled_group_ids)
-                grayscale_enabled_group_ids = [
-                    group_id
-                    for group_id in image_enabled_group_ids
-                    if action_type == "stop" and group_list.get(str(group_id), {}).get("stop_image_grayscale", False)
-                ]
-                background_enabled_group_ids = [
-                    group_id
-                    for group_id in image_enabled_group_ids
-                    if (
-                        group_list.get(str(group_id), {}).get("stop_image_background", False)
-                        if action_type == "stop"
-                        else group_list.get(str(group_id), {}).get("image_background", True)
-                    )
-                ]
-                should_render_normal_plain_card = any(
-                    group_id not in grayscale_enabled_group_ids and group_id not in background_enabled_group_ids
-                    for group_id in image_enabled_group_ids
-                )
-                background_grayscale_enabled_group_ids = [
-                    group_id
-                    for group_id in image_enabled_group_ids
-                    if (
-                        action_type == "stop"
-                        and group_id in background_enabled_group_ids
-                        and group_list.get(str(group_id), {}).get("stop_image_background_grayscale", False)
-                    )
-                ]
-                should_render_normal_background_card = any(
-                    group_id not in grayscale_enabled_group_ids
-                    and group_id in background_enabled_group_ids
-                    and group_id not in background_grayscale_enabled_group_ids
-                    for group_id in image_enabled_group_ids
-                )
-                should_render_normal_gray_background_card = any(
-                    group_id not in grayscale_enabled_group_ids and group_id in background_grayscale_enabled_group_ids
-                    for group_id in image_enabled_group_ids
-                )
-                should_render_grayscale_plain_card = any(
-                    group_id in grayscale_enabled_group_ids and group_id not in background_enabled_group_ids
-                    for group_id in image_enabled_group_ids
-                )
-                should_render_grayscale_background_card = any(
-                    group_id in grayscale_enabled_group_ids
-                    and group_id in background_enabled_group_ids
-                    and group_id not in background_grayscale_enabled_group_ids
-                    for group_id in image_enabled_group_ids
-                )
-                should_render_grayscale_gray_background_card = any(
-                    group_id in grayscale_enabled_group_ids and group_id in background_grayscale_enabled_group_ids
-                    for group_id in image_enabled_group_ids
-                )
-                card_image_bytes_grayscale = None
-                card_image_bytes_background = None
-                card_image_bytes_gray_background = None
-                card_image_bytes_grayscale_background = None
-                card_image_bytes_grayscale_gray_background = None
-
-                async def render_status_card(
-                    avatar_grayscale: bool = False,
-                    use_background: bool = False,
-                    background_grayscale: bool = False,
-                ) -> Optional[bytes]:
-                    stopped = action_type == "stop"
-                    background_url = (
-                        build_steam_game_background_url(appid_for_card)
-                        if use_background and appid_for_card
-                        else ""
-                    )
-                    if background_url:
-                        logger.debug(f"Steam 状态卡片使用游戏背景图: appid={appid_for_card}, url={background_url}")
-                    card_image = await render_dynamic_steam_card(
-                        avatar_url=avatar_url,
-                        player_name=res_info['personaname'],
-                        game_name=game_name_for_msg,
-                        action_text=action_text_for_card,
-                        background_url=background_url,
-                        avatar_grayscale=avatar_grayscale,
-                        background_grayscale=background_grayscale,
-                        stopped=stopped,
-                    )
-                    if not card_image:
-                        card_image = await render_steam_card(
-                            avatar_url=avatar_url,
-                            player_name=res_info['personaname'],
-                            game_name=game_name_for_msg,
-                            action_text=action_text_for_card,
-                            background_url=background_url,
-                            avatar_grayscale=avatar_grayscale,
-                            background_grayscale=background_grayscale,
-                            stopped=stopped,
-                        )
-                    return card_image
-
-                if should_render_card:
-                    try:
-                        if should_render_normal_plain_card:
-                            card_image_bytes = await render_status_card()
-                        if should_render_normal_background_card:
-                            card_image_bytes_background = await render_status_card(use_background=True)
-                        if should_render_normal_gray_background_card:
-                            card_image_bytes_gray_background = await render_status_card(
-                                use_background=True,
-                                background_grayscale=True,
-                            )
-                        if should_render_grayscale_plain_card:
-                            card_image_bytes_grayscale = await render_status_card(avatar_grayscale=True)
-                        if should_render_grayscale_background_card:
-                            card_image_bytes_grayscale_background = await render_status_card(
-                                avatar_grayscale=True,
-                                use_background=True,
-                            )
-                        if should_render_grayscale_gray_background_card:
-                            card_image_bytes_grayscale_gray_background = await render_status_card(
-                                avatar_grayscale=True,
-                                use_background=True,
-                                background_grayscale=True,
-                            )
-                    except Exception as e:
-                        logger.error(f"Steam卡片预渲染失败: {e}")
-
-                for group_id in steam_id_to_groups[steam_id]:
-                    if game_name_for_msg in exclude_game[str(group_id)]:
-                        logger.trace(f"群 {group_id} 屏蔽游戏 {game_name_for_msg}，跳过")
-                        continue
-
-                    if action_type == "switch" or action_type == "restart_switch":
-                        if game_name_old and game_name_old in exclude_game[str(group_id)]:
-                            logger.trace(f"群 {group_id} 屏蔽旧游戏 {game_name_old}，跳过")
-                            continue
-
-                    target, bot = await get_group_target_bot(group_id)
-
-                    if target:
-                        msg_to_send = None
-                        use_image_broadcast = group_id in image_enabled_group_ids
-                        use_grayscale = group_id in grayscale_enabled_group_ids
-                        use_background = group_id in background_enabled_group_ids
-                        use_background_grayscale = group_id in background_grayscale_enabled_group_ids
-                        if use_grayscale and use_background and use_background_grayscale:
-                            card_image_to_send = (
-                                card_image_bytes_grayscale_gray_background
-                                or card_image_bytes_grayscale_background
-                                or card_image_bytes_gray_background
-                                or card_image_bytes_grayscale
-                                or card_image_bytes_background
-                                or card_image_bytes
-                            )
-                        elif use_grayscale and use_background:
-                            card_image_to_send = (
-                                card_image_bytes_grayscale_background
-                                or card_image_bytes_grayscale
-                                or card_image_bytes_background
-                                or card_image_bytes
-                            )
-                        elif use_background and use_background_grayscale:
-                            card_image_to_send = (
-                                card_image_bytes_gray_background
-                                or card_image_bytes_background
-                                or card_image_bytes
-                            )
-                        elif use_grayscale:
-                            card_image_to_send = card_image_bytes_grayscale or card_image_bytes
-                        elif use_background:
-                            card_image_to_send = card_image_bytes_background or card_image_bytes
-                        else:
-                            card_image_to_send = card_image_bytes
-                        if use_image_broadcast and card_image_to_send:
-                            msg_to_send = UniMessage.image(raw=card_image_to_send)
-                        else:
-                            tone = config_steam.steam_tail_tone
-                            name = res_info['personaname']
-                            if action_type in ["start", "restart_switch"]:
-                                msg_to_send = UniMessage(f"{name} 开始玩 {game_name_for_msg}{tone} 。")
-                            elif action_type == "switch":
-                                msg_to_send = UniMessage(f"{name} 又开始玩 {game_name_for_msg}{tone} 。")
-                            elif action_type == "stop":
-                                if game_time_old == -1:
-                                    msg_to_send = UniMessage(
-                                        f"{name} 不再玩 {game_name_for_msg} 。但{random.choice(bot_name)}忘了，不记得玩了多久了{tone}。")
-                                else:
-                                    game_time = int(time.time() / 60) - game_time_old
-                                    game_time_text = (
-                                        format_playtime_duration(game_time)
-                                        if config_steam.steam_pretty_stop_duration
-                                        else f"{game_time} 分钟"
-                                    )
-                                    msg_to_send = UniMessage(
-                                        f"{name} 玩了 {game_time_text} {game_name_for_msg} 后不玩了{tone}。")
-
-                        if msg_to_send:
-                            try:
-                                logger.trace(
-                                    f"群 {group_id} 发送 Steam 状态: {res_info['personaname']} -> {game_name_for_msg}")
-                                await msg_to_send.send(target=target, bot=bot)
-                            except Exception as send_e:
-                                logger.warning(f"群 {group_id} 发送消息失败: {send_e}")
-                    else:
-                        await test_group_active(group_id)
-
-            elif "gameextrainfo" not in res_info and steam_list[steam_id]["game_name"] == "":
-                pass
+        if is_playing:
+            game_name = await gameid_to_name(res_info["gameid"], res_info["gameextrainfo"])
+            game_name = game_name or res_info["gameextrainfo"]
+            game_id = str(res_info.get("gameid", ""))
+            same_raw_game = game_id == str(previous_raw.get("game_id", "")) and bool(previous_raw.get("game_name"))
+            raw_time = previous_raw["time"] if same_raw_game else timestamp
+            steam_list[steam_id] = UserData(time=raw_time, game_name=game_name, nickname=nickname, game_id=game_id)
         else:
-            logger.debug(f"steam id:{steam_id} 查询状态不是200，{res.status_code} \n{res.text}")
+            game_name = ""
+            game_id = ""
+            steam_list[steam_id] = UserData(time=timestamp, game_name="", nickname=nickname, game_id="")
+
+        # steam_list 是最近一次 Steam 原始观测；真正的按群消息处理进度以下面状态为准。
+        for group_id in steam_id_to_groups[steam_id]:
+            group_id = str(group_id)
+            # steam_id_to_groups 是本轮开始时的快照。绑定/解绑命令可能在网络
+            # 请求或卡片渲染期间完成，发送前必须重新核验，不能向已解绑的群发送。
+            current_group = group_list.get(group_id)
+            if (
+                not current_group
+                or not current_group.get("status", False)
+                or steam_id not in current_group.get("user_list", [])
+            ):
+                logger.trace(f"Steam 状态任务已过期，跳过发送 steam_id:{steam_id} 群:{group_id}")
+                continue
+            async with get_delivery_group_lock(group_id):
+                current_reported = reported_steam_state.get(group_id, {}).get(steam_id)
+                delivery_generation = get_delivery_group_generation(group_id)
+                if not _delivery_is_current(
+                    group_id, steam_id, current_reported, delivery_generation
+                ):
+                    continue
+                reported = current_reported
+            previous_stop_count = pending_stop_counts.get(group_id, {}).get(steam_id, 0)
+            transition = decide_status_transition(
+                is_playing=is_playing,
+                game_name=game_name,
+                game_id=game_id,
+                reported=reported,
+                excluded_games=exclude_game.get(group_id, []),
+                pending_stop_count=previous_stop_count,
+                stop_confirmations=config_steam.steam_stop_confirmations,
+            )
+            if transition.pending_stop_count:
+                pending_stop_counts.setdefault(group_id, {})[steam_id] = transition.pending_stop_count
+            else:
+                stop_group = pending_stop_counts.get(group_id, {})
+                stop_group.pop(steam_id, None)
+                if not stop_group:
+                    pending_stop_counts.pop(group_id, None)
+
+            handled_state = UserData(time=timestamp, game_name=game_name, nickname=nickname, game_id=game_id)
+            if transition.clear_handled:
+                async with get_delivery_group_lock(group_id):
+                    if not _delivery_is_current(group_id, steam_id, reported, delivery_generation):
+                        continue
+                    if not _persist_group_event(group_id, steam_id, "stop", handled_state):
+                        continue
+                logger.debug(
+                    f"Steam 屏蔽游戏停止，已清理已处理状态 steam_id:{steam_id} "
+                    f"群:{group_id} 游戏:{reported['game_name']}"
+                )
+                continue
+            if not transition.action_type:
+                if transition.reason == "await_stop_confirmation":
+                    logger.trace(
+                        f"Steam 无游戏等待确认 steam_id:{steam_id} 群:{group_id} "
+                        f"{transition.pending_stop_count}/{config_steam.steam_stop_confirmations}"
+                    )
+                else:
+                    logger.trace(
+                        f"Steam 状态无需处理 steam_id:{steam_id} 群:{group_id} "
+                        f"reason:{transition.reason}"
+                    )
+                continue
+
+            action_type = transition.action_type
+            display_game_name = reported["game_name"] if action_type == "stop" else game_name
+            display_game_id = reported.get("game_id", "") if action_type == "stop" else game_id
+            reported_time = reported.get("time", -1) if reported else -1
+            if action_type == "stop":
+                if reported_time == -1:
+                    action_text = "结束了游戏"
+                else:
+                    duration = timestamp - reported_time
+                    duration_text = format_playtime_duration(duration) if config_steam.steam_pretty_stop_duration else f"{duration} 分钟"
+                    action_text = f"玩了 {duration_text} 后停止"
+            else:
+                action_text = "开始玩"
+            reported_snapshot = dict(reported) if reported else None
+            try:
+                target, bot = await get_group_target_bot(group_id)
+            except Exception as target_error:
+                async with get_delivery_group_lock(group_id):
+                    if not _delivery_is_current(group_id, steam_id, reported_snapshot, delivery_generation):
+                        logger.trace(f"Steam 群状态已变化，取消异常事件 steam_id:{steam_id} 群:{group_id}")
+                        continue
+                    if not _persist_group_event(group_id, steam_id, action_type, handled_state):
+                        continue
+                logger.warning(
+                    f"Steam 状态选择群 bot 失败，事件已消费且不重试 steam_id:{steam_id} "
+                    f"群:{group_id} action:{action_type}: {target_error}"
+                )
+                continue
+            if not target:
+                async with get_delivery_group_lock(group_id):
+                    if not _delivery_is_current(group_id, steam_id, reported_snapshot, delivery_generation):
+                        logger.trace(f"Steam 群状态已变化，取消失联事件 steam_id:{steam_id} 群:{group_id}")
+                        continue
+                    if not _persist_group_event(group_id, steam_id, action_type, handled_state):
+                        continue
+                logger.debug(f"Steam 群不可达，状态事件已消费 steam_id:{steam_id} 群:{group_id} action:{action_type}")
+                try:
+                    await test_group_active(group_id)
+                except Exception as active_error:
+                    logger.warning(f"Steam 失联群状态更新失败 群:{group_id}: {active_error}")
+                continue
+
+            group_data = group_list.get(group_id, {})
+            use_image = group_data.get("stop_image", False) if action_type == "stop" else group_data.get("image", True)
+            msg_to_send = None
+            if use_image:
+                try:
+                    avatar_url = await resolve_avatar_url(steam_id, res_info.get("avatarfull", ""))
+                    use_background = group_data.get("stop_image_background", False) if action_type == "stop" else group_data.get("image_background", True)
+                    avatar_grayscale = action_type == "stop" and group_data.get("stop_image_grayscale", False)
+                    background_grayscale = action_type == "stop" and group_data.get("stop_image_background_grayscale", False)
+                    background_url = build_steam_game_background_url(display_game_id) if use_background and display_game_id else ""
+                    logger.trace(f"Steam 状态卡片渲染 steam_id:{steam_id} 群:{group_id} action:{action_type} appid:{display_game_id}")
+                    card = await render_dynamic_steam_card(
+                        avatar_url=avatar_url, player_name=nickname, game_name=display_game_name,
+                        action_text=action_text, background_url=background_url,
+                        avatar_grayscale=avatar_grayscale, background_grayscale=background_grayscale,
+                        stopped=action_type == "stop",
+                    )
+                    if not card:
+                        card = await render_steam_card(
+                            avatar_url=avatar_url, player_name=nickname, game_name=display_game_name,
+                            action_text=action_text, background_url=background_url,
+                            avatar_grayscale=avatar_grayscale, background_grayscale=background_grayscale,
+                            stopped=action_type == "stop",
+                        )
+                    if card:
+                        msg_to_send = UniMessage.image(raw=card)
+                except Exception as card_e:
+                    logger.warning(f"Steam 状态卡片渲染失败 steam_id:{steam_id} 群:{group_id}: {card_e}")
+
+            if not msg_to_send:
+                tone = config_steam.steam_tail_tone
+                if action_type == "start":
+                    msg_to_send = UniMessage(f"{nickname} 开始玩 {display_game_name}{tone} 。")
+                elif action_type == "switch":
+                    msg_to_send = UniMessage(f"{nickname} 又开始玩 {display_game_name}{tone} 。")
+                elif reported_time == -1:
+                    msg_to_send = UniMessage(f"{nickname} 不再玩 {display_game_name} 。但{random.choice(bot_name)}忘了，不记得玩了多久了{tone}。")
+                else:
+                    duration = timestamp - reported_time
+                    duration_text = format_playtime_duration(duration) if config_steam.steam_pretty_stop_duration else f"{duration} 分钟"
+                    msg_to_send = UniMessage(f"{nickname} 玩了 {duration_text} {display_game_name} 后不玩了{tone}。")
+
+            # 同一状态事件只尝试一次：先原子落盘为“已处理”，再调用适配器发送。
+            # 适配器明确拒绝、网络未知和取消均不回滚，避免禁言、风控时反复触发风险。
+            async with get_delivery_group_lock(group_id):
+                if not _delivery_is_current(group_id, steam_id, reported_snapshot, delivery_generation):
+                    logger.trace(f"Steam 群状态已变化，取消发送 steam_id:{steam_id} 群:{group_id}")
+                    continue
+                if is_playing and game_name in exclude_game.get(group_id, []):
+                    logger.trace(f"Steam 发送前命中屏蔽游戏，取消发送 steam_id:{steam_id} 群:{group_id}")
+                    continue
+                logger.debug(
+                    f"Steam 状态事件准备落盘并发送 steam_id:{steam_id} 群:{group_id} "
+                    f"action:{action_type} appid:{display_game_id}"
+                )
+                try:
+                    await persist_then_send(
+                        reported_steam_state,
+                        group_id,
+                        steam_id,
+                        action_type,
+                        handled_state,
+                        lambda: save_reported_steam_state(reported_steam_state),
+                        lambda: msg_to_send.send(target=target, bot=bot),
+                    )
+                except HandledStatePersistenceError as persist_error:
+                    logger.error(
+                        "Steam 状态事件落盘失败，未发送且允许后续重新处理 "
+                        f"steam_id:{steam_id} 群:{group_id} action:{action_type}: "
+                        f"{persist_error.__cause__}"
+                    )
+                    continue
+                except asyncio.CancelledError:
+                    logger.warning(
+                        f"Steam 状态发送等待回包时被取消，事件不重试 steam_id:{steam_id} "
+                        f"群:{group_id} action:{action_type}"
+                    )
+                    raise
+                except ActionFailed as send_e:
+                    logger.warning(
+                        f"Steam 状态被适配器明确拒绝，事件不重试 steam_id:{steam_id} "
+                        f"群:{group_id} action:{action_type}: {send_e}"
+                    )
+                    continue
+                except NetworkError as send_e:
+                    logger.warning(
+                        f"Steam 状态发送结果不确定，事件不重试 steam_id:{steam_id} "
+                        f"群:{group_id} action:{action_type}: {send_e}"
+                    )
+                    continue
+                except Exception as send_e:
+                    logger.warning(
+                        f"Steam 状态发送失败，事件不重试 steam_id:{steam_id} "
+                        f"群:{group_id} action:{action_type}: {send_e}"
+                    )
+                    continue
+                logger.debug(f"Steam 状态发送完成 steam_id:{steam_id} 群:{group_id} action:{action_type} appid:{display_game_id}")
     except Exception as e:
         a, b, exc_traceback = sys.exc_info()
-        logger.debug(
+        logger.trace(
             f"steam id:{steam_id} 查询状态失败,line: {exc_traceback.tb_lineno if exc_traceback else ''}，{e.args} \n{res.text if res else None}\n{a}\n{b}")
-    finally:
-        if not isinstance(user_info, list):
-            steam_list[steam_id] = user_info
 
 
 @scheduler.scheduled_job("interval", minutes=config_steam.steam_interval, id="steam",
@@ -586,14 +540,7 @@ async def now_steam():
         global steam_list
         logger.debug("steam准备开始生成查询字典")
         task_list = []
-        steam_id_to_groups: Dict[str, List[str]] = {}
-        for group_id, group_data in group_list.items():
-            if group_data['status']:
-                user_list: List[str] = group_data['user_list']
-                for steam_id in user_list:
-                    if steam_id not in steam_id_to_groups:
-                        steam_id_to_groups[steam_id] = []
-                    steam_id_to_groups[steam_id].append(group_id)
+        steam_id_to_groups = build_steam_id_to_groups(group_list)
         logger.debug("steam生成查询字典完成，准备添加任务")
         async with http_client() as client:
             semaphore = asyncio.Semaphore(config_steam.steam_status_query_concurrency)
@@ -606,12 +553,23 @@ async def now_steam():
                 task_list.append(query_status(steam_id))
             try:
                 logger.debug("steam添加任务完成，准备运行并等待任务")
-                await asyncio.wait_for(asyncio.gather(*task_list), timeout=(config_steam.steam_interval * 60 - 20))
+                # 状态卡片（首次背景图/动态帧）可能需要数十秒。旧的 ``-20``
+                # 在一分钟轮询时只给整批任务 40 秒，会在 send_msg 已经发出、
+                # 仍等待适配器回包时取消协程，从而造成一次真实的漏播报。
+                # 仍预留 5 秒给下一轮调度，避免任务长期重叠。
+                query_timeout = max(1, config_steam.steam_interval * 60 - 5)
+                await asyncio.wait_for(asyncio.gather(*task_list), timeout=query_timeout)
                 logger.debug("steam自动查询任务完成")
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Steam 自动查询批次超时（{query_timeout} 秒），未完成任务已取消；"
+                    "请结合‘卡片渲染’和‘发送等待回包’日志排查"
+                )
             except Exception as e:
                 logger.debug(f"steam新异常:{e.args}")
             finally:
-                new_file_steam.write_text(json.dumps(steam_list))
+                atomic_write_json(new_file_steam, steam_list)
+                save_reported_steam_state(reported_steam_state)
                 logger.debug("steam finally保存完成")
 
 
@@ -658,18 +616,36 @@ steam_command_alc.shortcut("Steam", {"command": "steam {args}", "fuzzy": True})
 steam_cmd = on_alconna(steam_command_alc, priority=config_steam.steam_command_priority, rule=no_private_rule)
 
 
-def ensure_group_data(target: MsgTarget) -> str:
+async def ensure_group_data(target: MsgTarget) -> str:
+    """补齐群配置；命令触达失联群时在持锁状态下恢复并立即持久化。"""
     group_id = str(target.id)
     adapter = to_enum(target.adapter).value if target.adapter else ""
-    if group_id not in group_list:
-        group_list[group_id] = create_group_data(adapter=adapter)
-    else:
-        group_data = group_list[group_id]
-        defaults = create_group_data(adapter=group_data.get("adapter") or adapter)
-        for key, value in defaults.items():
-            group_data.setdefault(key, value)
-    if group_id not in exclude_game:
-        exclude_game[group_id] = list(exclude_game_default)
+    changed = False
+    recovered = False
+    async with get_delivery_group_lock(group_id):
+        if group_id not in group_list:
+            group_list[group_id] = create_group_data(adapter=adapter)
+            changed = True
+        else:
+            group_data = group_list[group_id]
+            defaults = create_group_data(adapter=group_data.get("adapter") or adapter)
+            for key, value in defaults.items():
+                if key not in group_data:
+                    group_data[key] = value
+                    changed = True
+        if group_id not in exclude_game:
+            exclude_game[group_id] = list(exclude_game_default)
+            changed = True
+        if group_id in inactive_groups:
+            inactive_groups.remove(group_id)
+            pending_stop_counts.pop(group_id, None)
+            bump_delivery_group_generation(group_id)
+            changed = True
+            recovered = True
+        if changed:
+            save_data()
+    if recovered:
+        logger.info(f"群组id： {group_id} 收到 Steam 命令，已从失联群组列表恢复")
     return group_id
 
 
@@ -684,8 +660,8 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
         except Exception as e:
             logger.debug(f"Steam 绑定出错，输入值：{steam_id}，错误：{e.args}")
             await matcher.finish(f"Steam ID格式错误{config_steam.steam_tail_tone}")
-    global steam_list, group_list, exclude_game
-    group_id = ensure_group_data(target)
+    global steam_list, group_list, exclude_game, reported_steam_state
+    group_id = await ensure_group_data(target)
 
     if steam_id in group_list[group_id]["user_list"]:
         await matcher.finish(f"已经绑定过了{config_steam.steam_tail_tone}")
@@ -716,10 +692,16 @@ async def steam_bind_handle(target: MsgTarget, matcher: Matcher, id: Match[str])
         logger.debug(f"{steam_id} 绑定失败，{e.args}")
         await matcher.finish(f"{steam_id} 绑定失败{config_steam.steam_tail_tone}，{e}")
 
-    # 更新缓存
-    steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name, game_id="")
-
-    group_list[group_id]["user_list"].append(steam_id)
+    # 新群绑定不应重置其他群正在使用的原始状态；本群已处理状态则必须清空。
+    async with get_delivery_group_lock(group_id):
+        if steam_id not in steam_list:
+            steam_list[steam_id] = UserData(time=0, game_name="", nickname=steam_name, game_id="")
+        else:
+            steam_list[steam_id]["nickname"] = steam_name
+        reported_steam_state.setdefault(group_id, {}).pop(steam_id, None)
+        pending_stop_counts.get(group_id, {}).pop(steam_id, None)
+        group_list[group_id]["user_list"].append(steam_id)
+        bump_delivery_group_generation(group_id)
     if group_list[group_id].get("owned_game", False):
         await initialize_owned_games_baseline([steam_id])
     save_data()
@@ -749,22 +731,30 @@ async def steam_del_handle(target: MsgTarget, matcher: Matcher, id: Match[str]):
             logger.debug(f"Steam 绑定出错，输入值：{steam_id}，错误：{e.args}")
             await matcher.finish(f"Steam ID格式错误{config_steam.steam_tail_tone}")
     steam_name: str = ""
-    global group_list
+    global group_list, reported_steam_state
 
     group_id = str(target.id)
     if group_id not in group_list:
         await matcher.finish(f"本群不存在 Steam 绑定记录{config_steam.steam_tail_tone}")
-    ensure_group_data(target)
+    await ensure_group_data(target)
 
     if steam_id not in group_list[group_id]["user_list"]:
         await matcher.finish(f"本群尚未绑定该 Steam ID{config_steam.steam_tail_tone}")
     steam_name = steam_list[steam_id]["nickname"]
 
-    try:
-        group_list[group_id]["user_list"].remove(steam_id)
-    except Exception as e:
-        logger.debug(f"删除steam id 失败，输入值：{steam_id}，错误：{e.args}")
-        await matcher.finish(f"没有找到 Steam ID：{steam_id}{config_steam.steam_tail_tone}")
+    async with get_delivery_group_lock(group_id):
+        try:
+            group_list[group_id]["user_list"].remove(steam_id)
+        except Exception as e:
+            logger.debug(f"删除steam id 失败，输入值：{steam_id}，错误：{e.args}")
+            await matcher.finish(f"没有找到 Steam ID：{steam_id}{config_steam.steam_tail_tone}")
+        group_reported = reported_steam_state.get(group_id)
+        if group_reported:
+            group_reported.pop(steam_id, None)
+            if not group_reported:
+                reported_steam_state.pop(group_id, None)
+        pending_stop_counts.get(group_id, {}).pop(steam_id, None)
+        bump_delivery_group_generation(group_id)
     save_data()
     await matcher.finish(f"Steam ID：{steam_id}\nSteam Name：{steam_name}\n 删除成功了{config_steam.steam_tail_tone}")
 
@@ -779,11 +769,7 @@ async def steam_clude_handle(target: MsgTarget, arp: Arparma, matcher: Matcher, 
     global group_list, exclude_game
     handle = next(iter(arp.components))
     game_name = str(game.result)
-    needs_save = str(target.id) not in group_list or str(target.id) not in exclude_game
-    group_id = ensure_group_data(target)
-    if needs_save:
-        exclude_game_file.write_text(json.dumps(exclude_game))
-        new_file_group.write_text(json.dumps(group_list))
+    group_id = await ensure_group_data(target)
     if game_name == "":
         await matcher.finish(f"请输入要{handle}的完整游戏名称{config_steam.steam_tail_tone}")
     elif handle == "屏蔽":
@@ -794,18 +780,14 @@ async def steam_clude_handle(target: MsgTarget, arp: Arparma, matcher: Matcher, 
         if game_name not in exclude_game[group_id]:
             await matcher.finish(f"{game_name} 没有被屏蔽过{config_steam.steam_tail_tone}")
         exclude_game[group_id].remove(game_name)
-    exclude_game_file.write_text(json.dumps(exclude_game))
+    atomic_write_json(exclude_game_file, exclude_game)
     await matcher.finish(f"{handle}游戏 {game_name} 完成{config_steam.steam_tail_tone}")
 
 
 @steam_cmd.assign("排除列表")
 async def steam_exclude_list_handle(target: MsgTarget):
     global group_list, exclude_game
-    needs_save = str(target.id) not in group_list or str(target.id) not in exclude_game
-    group_id = ensure_group_data(target)
-    if needs_save:
-        exclude_game_file.write_text(json.dumps(exclude_game))
-        new_file_group.write_text(json.dumps(group_list))
+    group_id = await ensure_group_data(target)
 
     nodes = [
         CustomNode(
@@ -820,7 +802,7 @@ async def steam_exclude_list_handle(target: MsgTarget):
 
 @steam_cmd.assign("list")
 async def steam_bind_list_handle(target: MsgTarget):
-    group_id = ensure_group_data(target)
+    group_id = await ensure_group_data(target)
     try:
         nodes = [
             CustomNode(
@@ -843,8 +825,12 @@ async def steam_on_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"仅允许设置播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        group_id = ensure_group_data(target)
-        group_list[group_id]["status"] = True if str(status.result) == "开启" else False
+        group_id = await ensure_group_data(target)
+        async with get_delivery_group_lock(group_id):
+            group_list[group_id]["status"] = True if str(status.result) == "开启" else False
+            if str(status.result) == "关闭":
+                pending_stop_counts.pop(group_id, None)
+            bump_delivery_group_generation(group_id)
         save_data()
         await UniMessage(f"Steam 播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
 
@@ -855,7 +841,7 @@ async def steam_image_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"仅允许设置图片播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        group_id = ensure_group_data(target)
+        group_id = await ensure_group_data(target)
         group_list[group_id]["image"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 图片播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
@@ -867,7 +853,7 @@ async def steam_image_background_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"仅允许设置图片背景开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        group_id = ensure_group_data(target)
+        group_id = await ensure_group_data(target)
         group_list[group_id]["image_background"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 图片背景已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
@@ -879,7 +865,7 @@ async def steam_stop_image_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"仅允许设置结束图片播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        group_id = ensure_group_data(target)
+        group_id = await ensure_group_data(target)
         group_list[group_id]["stop_image"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 结束图片播报已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
@@ -891,7 +877,7 @@ async def steam_stop_image_background_handle(target: MsgTarget, status: Match[st
         await UniMessage(f"仅允许设置结束图片背景开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        group_id = ensure_group_data(target)
+        group_id = await ensure_group_data(target)
         group_list[group_id]["stop_image_background"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 结束图片背景已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
@@ -903,7 +889,7 @@ async def steam_stop_image_grayscale_handle(target: MsgTarget, status: Match[str
         await UniMessage(f"仅允许设置结束头像黑白开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        group_id = ensure_group_data(target)
+        group_id = await ensure_group_data(target)
         group_list[group_id]["stop_image_grayscale"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 结束头像黑白已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
@@ -915,7 +901,7 @@ async def steam_stop_background_grayscale_handle(target: MsgTarget, status: Matc
         await UniMessage(f"仅允许设置结束背景黑白开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        group_id = ensure_group_data(target)
+        group_id = await ensure_group_data(target)
         group_list[group_id]["stop_image_background_grayscale"] = True if str(status.result) == "开启" else False
         save_data()
         await UniMessage(f"Steam 结束背景黑白已{str(status.result)}{config_steam.steam_tail_tone}").send(reply_to=True)
@@ -927,7 +913,7 @@ async def steam_owned_game_handle(target: MsgTarget, status: Match[str]):
         await UniMessage(f"仅允许设置入库播报开启或关闭{config_steam.steam_tail_tone}").send(reply_to=True)
     else:
         global group_list
-        group_id = ensure_group_data(target)
+        group_id = await ensure_group_data(target)
         owned_game_enabled = str(status.result) == "开启"
         group_list[group_id]["owned_game"] = owned_game_enabled
         created = 0
@@ -949,8 +935,8 @@ async def steam_owned_game_handle(target: MsgTarget, status: Match[str]):
 
 @steam_cmd.assign("喜加一")
 async def steam_free_handle(target: MsgTarget, matcher: Matcher, action: Match[str]):
+    group_id = await ensure_group_data(target)
     if action.result:
-        group_id = ensure_group_data(target)
         group_list[group_id]["xijiayi"] = True if str(action.result) == "订阅" else False
         save_data()
         await matcher.finish(f"steam 喜加一 已{str(action.result)}{config_steam.steam_tail_tone}")
@@ -993,7 +979,7 @@ async def steam_wall(matcher: Matcher, user: Match[str]):
 @steam_cmd.assign("打折订阅")
 async def steam_discounted_games_bind(target: MsgTarget, matcher: Matcher, game: Match[str]):
     global game_discounted_subscribe
-    group_id = ensure_group_data(target)
+    group_id = await ensure_group_data(target)
     game_id = str(game.result)
     if group_id in game_discounted_subscribe.get(game_id, []):
         await matcher.finish(f"已订阅过 {config_steam.steam_tail_tone}", reply_message=True)
@@ -1016,7 +1002,7 @@ async def steam_discounted_games_bind(target: MsgTarget, matcher: Matcher, game:
 @steam_cmd.assign("打折退订")
 async def steam_discounted_games_del(target: MsgTarget, matcher: Matcher, game: Match[str]):
     global game_discounted_subscribe
-    group_id = str(target.id)
+    group_id = await ensure_group_data(target)
     game_id = str(game.result)
     if game_id not in game_discounted_subscribe or group_id not in game_discounted_subscribe[game_id]:
         await matcher.finish(f"未订阅过 {config_steam.steam_tail_tone}", reply_message=True)

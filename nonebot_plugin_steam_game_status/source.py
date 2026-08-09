@@ -1,10 +1,14 @@
+import asyncio
 import json
-import shutil
 import os
+import shutil
+import tempfile
+import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from nonebot import require,logger
 from .model import GroupData, GroupData2, GroupData3, GroupDataNew, UserData
+from .status_state import build_conservative_reported_state, sanitize_reported_state
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as store  # noqa: E402
 
@@ -15,6 +19,66 @@ data_dir = plugin_data_dir / nb_project
 
 # Ensure the new directories exist
 data_dir.mkdir(parents=True, exist_ok=True)
+
+
+def atomic_write_json(path: Path, data: object) -> None:
+    """以同目录临时文件替换 JSON，避免进程中断留下半截状态文件。"""
+    temp_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf8", dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as temp_file:
+            temp_name = temp_file.name
+            json.dump(data, temp_file)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_name, path)
+    finally:
+        if temp_name and os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def load_json_or_recover(path: Path, default: object) -> object:
+    """读取 JSON；损坏或顶层结构不符时保留副本并以安全默认值恢复。"""
+    try:
+        result = json.loads(path.read_text("utf8"))
+        if type(result) is not type(default):
+            raise ValueError(
+                f"顶层类型应为 {type(default).__name__}，实际为 {type(result).__name__}"
+            )
+        return result
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        backup = path.with_name(f"{path.name}.corrupt.{int(time.time())}")
+        try:
+            if path.exists():
+                os.replace(path, backup)
+        except OSError:
+            logger.warning(f"Steam 状态文件损坏且备份失败: {path}, {error}")
+        else:
+            logger.warning(f"Steam 状态文件损坏，已隔离并使用默认值恢复: {path}, {error}")
+        atomic_write_json(path, default)
+        return default
+
+
+# 同一群的状态发送和群配置变更必须线性化，避免解绑后旧任务重新写回状态。
+delivery_group_locks: Dict[str, asyncio.Lock] = {}
+delivery_group_generations: Dict[str, int] = {}
+
+
+def get_delivery_group_lock(group_id: str) -> asyncio.Lock:
+    return delivery_group_locks.setdefault(str(group_id), asyncio.Lock())
+
+
+def get_delivery_group_generation(group_id: str) -> int:
+    return delivery_group_generations.get(str(group_id), 0)
+
+
+def bump_delivery_group_generation(group_id: str) -> int:
+    """使已在途的群状态任务失效；调用方需持有该群锁。"""
+    group_id = str(group_id)
+    next_generation = get_delivery_group_generation(group_id) + 1
+    delivery_group_generations[group_id] = next_generation
+    return next_generation
 
 # 兼容性检测
 
@@ -35,6 +99,10 @@ old_dirpath = Path() / "data" / "steam_group" / "group_list.json"
 # 新文件路径
 new_file_steam = data_dir / "steam_user_list.json"
 new_file_group = data_dir / "steam_group_list.json"
+# 每个群已消费到的 Steam 状态。不能复用 steam_user_list：同一个 SteamID
+# 在不同群可能有不同的屏蔽列表、不同的消息处理结果。
+reported_steam_state_file = data_dir / "reported_steam_state.json"
+reported_steam_state_schema_version = 1
 game_cache_file = data_dir / "game_cache.json"
 exclude_game_file = data_dir / "exclude_game"
 game_free_cache_file = data_dir / "game_free_cache.json"
@@ -47,6 +115,69 @@ image_resource_cache_dir = data_dir / "image_resource_cache"
 dynamic_card_cache_dir.mkdir(parents=True, exist_ok=True)
 image_resource_cache_dir.mkdir(parents=True, exist_ok=True)
 
+
+def save_reported_steam_state(state: Dict[str, Dict[str, UserData]]) -> None:
+    """持久化按群已处理状态，并为后续迁移保留显式版本。"""
+    atomic_write_json(
+        reported_steam_state_file,
+        {"schema_version": reported_steam_state_schema_version, "groups": state},
+    )
+
+
+def _isolate_unusable_reported_steam_state(reason: str) -> None:
+    backup = reported_steam_state_file.with_name(
+        f"{reported_steam_state_file.name}.unsupported.{int(time.time())}"
+    )
+    try:
+        os.replace(reported_steam_state_file, backup)
+    except OSError as error:
+        logger.warning(
+            f"Steam 按群已处理状态{reason}，备份失败: "
+            f"{reported_steam_state_file}, {error}"
+        )
+    else:
+        logger.warning(
+            f"Steam 按群已处理状态{reason}，已隔离: {backup}"
+        )
+
+
+def load_reported_steam_state() -> Optional[Dict[str, Dict[str, UserData]]]:
+    """读取已处理状态；整文件不可用时返回 None，由调用方建立保守基线。"""
+    try:
+        document = json.loads(reported_steam_state_file.read_text("utf8"))
+    except (OSError, json.JSONDecodeError) as error:
+        _isolate_unusable_reported_steam_state(f"无法解析: {error}")
+        return None
+    if not isinstance(document, dict):
+        _isolate_unusable_reported_steam_state("顶层不是对象")
+        return None
+
+    legacy = "schema_version" not in document
+    if "schema_version" not in document:
+        groups = document
+    elif document.get("schema_version") == reported_steam_state_schema_version:
+        groups = document.get("groups")
+    else:
+        _isolate_unusable_reported_steam_state("版本不支持")
+        return None
+
+    try:
+        state, invalid_records = sanitize_reported_state(groups)
+    except ValueError as error:
+        _isolate_unusable_reported_steam_state(f"结构不支持: {error}")
+        return None
+
+    for group_id, steam_id in invalid_records:
+        logger.warning(
+            "Steam 按群已处理状态记录字段无效，已仅丢弃该记录: "
+            f"群:{group_id} steam_id:{steam_id}"
+        )
+    if legacy:
+        logger.info("Steam 按群已处理状态升级为带版本格式")
+    if legacy or invalid_records:
+        save_reported_steam_state(state)
+    return state
+
 exclude_game_default = ["Wallpaper Engine：壁纸引擎","虚拟桌宠模拟器","OVR Toolkit","OVR Advanced Settings","OBS Studio","VTube Studio","Live2DViewerEX","Blender","LIV"]
 
 # 判断旧文件存不存在
@@ -55,31 +186,31 @@ if not old_dirpath.exists():
     if not new_file_steam.exists():
         # 也不存在，新用户，直接创建
         logger.info("初次启动，创建 steam 缓存文件")
-        new_file_steam.write_text("{}")
-        new_file_group.write_text("{}")
-        game_cache_file.write_text("{}")
-        exclude_game_file.write_text("{}")
-        game_free_cache_file.write_text("[]")
-        owned_games_file.write_text("{}")
+        atomic_write_json(new_file_steam, {})
+        atomic_write_json(new_file_group, {})
+        atomic_write_json(game_cache_file, {})
+        atomic_write_json(exclude_game_file, {})
+        atomic_write_json(game_free_cache_file, [])
+        atomic_write_json(owned_games_file, {})
     else:
         # 存在，准备好的新用户
         # 看看exclude在不在
-        group_tmp = json.loads(new_file_group.read_text(encoding='utf8'))
+        group_tmp: Dict[str, GroupDataNew] = load_json_or_recover(new_file_group, {})  # type: ignore[assignment]
         if not exclude_game_file.exists():
-            game_cache_file.write_text("{}")
+            atomic_write_json(game_cache_file, {})
             if group_tmp == {}:
-                exclude_game_file.write_text("{}")
+                atomic_write_json(exclude_game_file, {})
             else:
                 exclude_game_tmp = {}
                 for group_id in group_tmp:
                     exclude_game_tmp[group_id] = list(exclude_game_default)
-                exclude_game_file.write_text(json.dumps(exclude_game_tmp))
+                atomic_write_json(exclude_game_file, exclude_game_tmp)
         else:
-            exclude_game_tmp = json.loads(exclude_game_file.read_text(encoding='utf8'))
+            exclude_game_tmp: Dict[str, List[str]] = load_json_or_recover(exclude_game_file, {})  # type: ignore[assignment]
             for group_id in group_tmp:
                 if group_id not in exclude_game_tmp:
                     exclude_game_tmp[group_id] = list(exclude_game_default)
-            exclude_game_file.write_text(json.dumps(exclude_game_tmp))
+            atomic_write_json(exclude_game_file, exclude_game_tmp)
         
 
 else:
@@ -87,7 +218,7 @@ else:
     if not new_file_steam.exists():
         # 不存在新文件，准备迁移
         
-        old_json = json.loads(old_dirpath.read_text())
+        old_json = load_json_or_recover(old_dirpath, {})
         
         new_json_steam = {}
         new_json_group = {}
@@ -108,13 +239,13 @@ else:
                         new_json_steam[steam_id] = user_data
             
             # 写入新文件
-            new_file_steam.write_text(json.dumps(new_json_steam))
-            new_file_group.write_text(json.dumps(new_json_group))
+            atomic_write_json(new_file_steam, new_json_steam)
+            atomic_write_json(new_file_group, new_json_group)
             # 太久远版本没做迁移，懒得适配排除目录和喜加一目录了，直接删除重新旧数据比较快
             logger.success("steam 数据迁移完成")
 
 # 25.08.21 UserData迁移
-steam_list_tmp = json.loads(new_file_steam.read_text("utf8")) 
+steam_list_tmp: Dict[str, UserData] = load_json_or_recover(new_file_steam, {})  # type: ignore[assignment]
 steam_list_tmp_first_val = next(iter(steam_list_tmp.values()), None)
 if steam_list_tmp_first_val is not None and isinstance(steam_list_tmp_first_val, list):
     steam_list_dict = {}
@@ -125,11 +256,11 @@ if steam_list_tmp_first_val is not None and isinstance(steam_list_tmp_first_val,
             nickname=steam_list_tmp[steam_id][2],
             game_id="",
             )
-    new_file_steam.write_text(json.dumps(steam_list_dict))
+    atomic_write_json(new_file_steam, steam_list_dict)
     logger.success("steam 0.2.0 数据迁移成功")
 
 # 25.09.02 adapter更新
-steam_group_25_09_02: Dict[str, GroupData] = json.loads(new_file_group.read_text("utf8")) 
+steam_group_25_09_02: Dict[str, GroupData] = load_json_or_recover(new_file_group, {})  # type: ignore[assignment]
 value_25_09_02 = next(iter(steam_group_25_09_02.values()), None)
 if value_25_09_02:
     if "adapter" not in value_25_09_02:
@@ -140,12 +271,12 @@ if value_25_09_02:
                 user_list=steam_group_25_09_02[group_id]["user_list"],
                 adapter="OneBot v11"
             )
-        new_file_group.write_text(json.dumps(steam_group_dict_25_09_02))
+        atomic_write_json(new_file_group, steam_group_dict_25_09_02)
         logger.success("steam 0.2.1 25.09.02 adapter更新数据成功")
 
 
 # 25.09.08 xijiayi更新
-steam_group_25_09_08: Dict[str, GroupData2] = json.loads(new_file_group.read_text("utf8")) 
+steam_group_25_09_08: Dict[str, GroupData2] = load_json_or_recover(new_file_group, {})  # type: ignore[assignment]
 value_25_09_08 = next(iter(steam_group_25_09_08.values()), None)
 if value_25_09_08:
     if "xijiayi" not in value_25_09_08:
@@ -157,15 +288,15 @@ if value_25_09_08:
                 adapter=steam_group_25_09_08[group_id]["adapter"],
                 xijiayi=False
             )
-        new_file_group.write_text(json.dumps(steam_group_dict_25_09_08))
+        atomic_write_json(new_file_group, steam_group_dict_25_09_08)
         logger.success("steam 0.2.2 25.09.08 xijiayi更新数据成功")
 
 # 0.2.2 25.09.08 版本喜加一适配
 if not game_free_cache_file.exists():
-    game_free_cache_file.write_text("[]")
+    atomic_write_json(game_free_cache_file, [])
 
 # 26.07.07 图片播报开关适配
-steam_group_26_07_07: Dict[str, GroupData3] = json.loads(new_file_group.read_text("utf8"))
+steam_group_26_07_07: Dict[str, GroupData3] = load_json_or_recover(new_file_group, {})  # type: ignore[assignment]
 value_26_07_07 = next(iter(steam_group_26_07_07.values()), None)
 if value_26_07_07:
     if "image" not in value_26_07_07:
@@ -179,11 +310,11 @@ if value_26_07_07:
                 image=True,
                 stop_image=False
             )
-        new_file_group.write_text(json.dumps(steam_group_dict_26_07_07))
+        atomic_write_json(new_file_group, steam_group_dict_26_07_07)
         logger.success("steam 0.3.6 26.07.07 图片播报开关数据更新成功")
 
 # 26.07.07 结束游戏图片播报开关适配
-steam_group_stop_image_26_07_07: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
+steam_group_stop_image_26_07_07: Dict[str, GroupDataNew] = load_json_or_recover(new_file_group, {})  # type: ignore[assignment]
 value_stop_image_26_07_07 = next(iter(steam_group_stop_image_26_07_07.values()), None)
 if value_stop_image_26_07_07:
     if "stop_image" not in value_stop_image_26_07_07:
@@ -197,17 +328,17 @@ if value_stop_image_26_07_07:
                 image=steam_group_stop_image_26_07_07[group_id]["image"],
                 stop_image=False
             )
-        new_file_group.write_text(json.dumps(steam_group_stop_image_dict_26_07_07))
+        atomic_write_json(new_file_group, steam_group_stop_image_dict_26_07_07)
         logger.success("steam 0.3.6 26.07.07 结束游戏图片播报开关数据更新成功")
 
 # 25.11.28 低价订阅适配
 if not game_discounted_cache_file.exists():
-    game_discounted_cache_file.write_text("[]")
+    atomic_write_json(game_discounted_cache_file, [])
 if not game_discounted_subscribe_file.exists():
-    game_discounted_subscribe_file.write_text("{}")
+    atomic_write_json(game_discounted_subscribe_file, {})
 
 # 26.07.07 Steam 游戏库入库播报适配
-steam_group_owned_game_26_07_07: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
+steam_group_owned_game_26_07_07: Dict[str, GroupDataNew] = load_json_or_recover(new_file_group, {})  # type: ignore[assignment]
 value_owned_game_26_07_07 = next(iter(steam_group_owned_game_26_07_07.values()), None)
 if value_owned_game_26_07_07:
     if "owned_game" not in value_owned_game_26_07_07:
@@ -222,13 +353,13 @@ if value_owned_game_26_07_07:
                 stop_image=steam_group_owned_game_26_07_07[group_id]["stop_image"],
                 owned_game=False
             )
-        new_file_group.write_text(json.dumps(steam_group_owned_game_dict_26_07_07))
+        atomic_write_json(new_file_group, steam_group_owned_game_dict_26_07_07)
         logger.success("steam 0.3.6 26.07.07 游戏库入库播报开关数据更新成功")
 if not owned_games_file.exists():
-    owned_games_file.write_text("{}")
+    atomic_write_json(owned_games_file, {})
 
 # 26.07.08 Steam 状态卡片背景群开关适配
-steam_group_card_background_26_07_08: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
+steam_group_card_background_26_07_08: Dict[str, GroupDataNew] = load_json_or_recover(new_file_group, {})  # type: ignore[assignment]
 value_card_background_26_07_08 = next(iter(steam_group_card_background_26_07_08.values()), None)
 if value_card_background_26_07_08:
     if any(
@@ -243,39 +374,48 @@ if value_card_background_26_07_08:
             group_data.setdefault("stop_image_background", False)
             group_data.setdefault("stop_image_background_grayscale", False)
             steam_group_card_background_dict_26_07_08[group_id] = group_data
-        new_file_group.write_text(json.dumps(steam_group_card_background_dict_26_07_08))
+        atomic_write_json(new_file_group, steam_group_card_background_dict_26_07_08)
         logger.success("steam 0.4.0 26.07.08 状态卡片背景群开关数据更新成功")
 
 # 26.07.08 UserData 当前游戏 appid 适配
-steam_list_game_id_26_07_08: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8"))
+steam_list_game_id_26_07_08: Dict[str, UserData] = load_json_or_recover(new_file_steam, {})  # type: ignore[assignment]
 value_game_id_26_07_08 = next(iter(steam_list_game_id_26_07_08.values()), None)
 if value_game_id_26_07_08 and any("game_id" not in user_data for user_data in steam_list_game_id_26_07_08.values()):
     for user_data in steam_list_game_id_26_07_08.values():
         user_data.setdefault("game_id", "")
-    new_file_steam.write_text(json.dumps(steam_list_game_id_26_07_08))
+    atomic_write_json(new_file_steam, steam_list_game_id_26_07_08)
     logger.success("steam 0.4.0 26.07.08 用户当前游戏 appid 数据更新成功")
 
-group_list: Dict[str, GroupDataNew] = json.loads(new_file_group.read_text("utf8"))
-steam_list: Dict[str, UserData] = json.loads(new_file_steam.read_text("utf8")) 
-gameid2name = json.loads(game_cache_file.read_text("utf8"))
-exclude_game: Dict[str, List[str]] = json.loads(exclude_game_file.read_text("utf8"))
-game_free_cache: List[str] = json.loads(game_free_cache_file.read_text("utf8"))
-game_discounted_cache:List[str] = json.loads(game_discounted_cache_file.read_text("utf8"))
-game_discounted_subscribe: Dict[str, List[str]] = json.loads(game_discounted_subscribe_file.read_text("utf8"))
-owned_games: Dict[str, Dict[str, str]] = json.loads(owned_games_file.read_text("utf8"))
+group_list: Dict[str, GroupDataNew] = load_json_or_recover(new_file_group, {})  # type: ignore[assignment]
+steam_list: Dict[str, UserData] = load_json_or_recover(new_file_steam, {})  # type: ignore[assignment]
+gameid2name: Dict[str, str] = load_json_or_recover(game_cache_file, {})  # type: ignore[assignment]
+exclude_game: Dict[str, List[str]] = load_json_or_recover(exclude_game_file, {})  # type: ignore[assignment]
+game_free_cache: List[str] = load_json_or_recover(game_free_cache_file, [])  # type: ignore[assignment]
+game_discounted_cache: List[str] = load_json_or_recover(game_discounted_cache_file, [])  # type: ignore[assignment]
+game_discounted_subscribe: Dict[str, List[str]] = load_json_or_recover(game_discounted_subscribe_file, {})  # type: ignore[assignment]
+owned_games: Dict[str, Dict[str, str]] = load_json_or_recover(owned_games_file, {})  # type: ignore[assignment]
+
+# 0.5.0：新增按群已处理状态。旧版本无法区分“已发送”和“曾被屏蔽后写入缓存”，
+# 因此首次迁移或文件整体不可用时建立保守基线，避免给所有正在游戏的用户补报。
+loaded_reported_state = load_reported_steam_state() if reported_steam_state_file.exists() else None
+if loaded_reported_state is None:
+    reported_steam_state: Dict[str, Dict[str, UserData]] = build_conservative_reported_state(
+        steam_list, group_list, exclude_game, exclude_game_default
+    )  # type: ignore[assignment]
+    save_reported_steam_state(reported_steam_state)
+    logger.info("Steam 按群已处理状态已建立保守基线，不补发已有游戏状态")
+else:
+    reported_steam_state = loaded_reported_state
+
 # 与bot失联的group列表
 inactive_groups: List[str] = []
 inactive_groups_file: Path = data_dir / "inactive_groups.json"
 
 # 初始化 inactive_groups
 if inactive_groups_file.exists():
-    try:
-        inactive_groups = json.loads(inactive_groups_file.read_text("utf8"))
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse inactive_groups.json, initializing as empty list")
-        inactive_groups = []
+    inactive_groups = load_json_or_recover(inactive_groups_file, [])  # type: ignore[assignment]
 else:
-    inactive_groups_file.write_text("[]")
+    atomic_write_json(inactive_groups_file, [])
     
 HTML_TEMPLATE = """
 <!DOCTYPE html>
